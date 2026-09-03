@@ -6,6 +6,12 @@ Draws the note letter (A–G♯) on every fret, on both the 3D Highway and the c
 
 ## Installation
 
+### Windows — automatic
+
+Download **[Install-HighwayNotation.exe](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Install-HighwayNotation.exe)** and run it from inside the extracted release folder (it needs `highway_notation\`, `highway_3d\`, and `static\` sitting next to it). It finds your FeedBack install automatically, asks to confirm, and copies everything into place. Requires admin rights (it'll prompt). Source: [Install-HighwayNotation.ps1](Install-HighwayNotation.ps1).
+
+### Manual (all platforms)
+
 This isn't a single drop-in plugin — the download has three folders, and they don't all go to the same place. Please place each folder in the locations listed below. Overwrite existing files.
 
 1. **Highway Notation Plugin**

@@ -1,6 +1,6 @@
 # Highway Notation
 
-Draws the note letter (A–G♯) on every gem, on both the 3D Highway and the classic 2D Highway.
+Draws the note letter (A–G♯) on every fret, on both the 3D Highway and the classic 2D Highway.
 
 **[Download latest release](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)**
 

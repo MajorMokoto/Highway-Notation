@@ -2,6 +2,8 @@
 
 Draws the note letter (A–G♯) on every gem, on both the 3D Highway and the classic 2D Highway.
 
+**[Download latest release](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)**
+
 ## Installation
 
 This isn't a single drop-in plugin — the download has three folders, and they don't all go to the same place. Please place each folder in the locations listed below. Overwrite existing files.

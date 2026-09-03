@@ -1,0 +1,9 @@
+{
+  "id": "highway_notation",
+  "name": "Highway Notation",
+  "version": "0.1.0",
+  "bundled": false,
+  "private": false,
+  "script": "screen.js",
+  "description": "Shows the chromatic note letter (F, G, etc.) on each gem, on both the classic 2D highway and the 3D Highway. Some 2D features require small core hooks in static/highway.js and static/js/highway-draw.js."
+}

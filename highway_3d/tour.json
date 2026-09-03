@@ -1,0 +1,44 @@
+{
+    "version": 1,
+    "tour": [
+        {
+            "id": "welcome",
+            "title": "Welcome to the 3D Highway",
+            "content": "This plugin renders your song's note chart as a live 3D highway. Let's take a quick look at what you can do.",
+            "shape": "bubble",
+            "position": "auto"
+        },
+        {
+            "id": "canvas",
+            "selector": ".h3d-wrap[data-h3d-primary]",
+            "waitFor": ".h3d-wrap[data-h3d-primary]",
+            "title": "The Note Highway",
+            "content": "Notes flow toward you in 3D. The glowing horizontal line marks the strum point — hit notes as they cross it.",
+            "shape": "spotlight",
+            "position": "bottom"
+        },
+        {
+            "id": "camera",
+            "selector": "#player",
+            "title": "Auto-Tracking Camera",
+            "content": "The camera automatically follows the action, smoothly panning to keep the active fret range in frame. Adjust camera height, distance, and smoothing in Settings → 3D Highway.",
+            "shape": "bubble",
+            "position": "top"
+        },
+        {
+            "id": "customise",
+            "selector": "#player",
+            "title": "Customise the Look",
+            "content": "Open Settings → 3D Highway to change colour palettes, background effects, glow intensity, and camera smoothing.",
+            "shape": "bubble",
+            "position": "left"
+        },
+        {
+            "id": "outro",
+            "title": "You're ready to shred",
+            "content": "That's the 3D Highway. Load a song and hit Play to see it in action. Restart this tour any time with the ? button.",
+            "shape": "bubble",
+            "position": "auto"
+        }
+    ]
+}

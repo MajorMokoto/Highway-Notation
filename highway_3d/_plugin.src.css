@@ -1,0 +1,6 @@
+/* Tailwind input for the 3D Highway plugin's own stylesheet.
+   Utilities only — core ships the single base reset (preflight), so this
+   plugin builds with corePlugins.preflight=false and must NOT re-include
+   `@tailwind base`. Generated artifact: assets/plugin.css (committed).
+   Regenerate with: bash build-tailwind.sh */
+@tailwind utilities;

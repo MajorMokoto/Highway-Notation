@@ -2,13 +2,13 @@
 
 Draws the note letter (A–G♯) on every fret, on both the 3D Highway and the classic 2D Highway.
 
-**[Download latest release](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)**
+**[Download latest release](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)** — includes both the Windows installer and the plain folders for manual install
 
 ## Installation
 
 ### Windows — automatic
 
-Download **[Install-HighwayNotation.exe](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Install-HighwayNotation.exe)** and run it from inside the extracted release folder (it needs `highway_notation\`, `highway_3d\`, and `static\` sitting next to it). It finds your FeedBack install automatically, asks to confirm, and copies everything into place. Requires admin rights (it'll prompt). Source: [Install-HighwayNotation.ps1](Install-HighwayNotation.ps1).
+After extracting the zip, run **Install-HighwayNotation.exe** from inside the extracted folder. It finds your FeedBack install automatically, asks to confirm, and copies everything into place. Requires admin rights (it'll prompt). Source: [Install-HighwayNotation.ps1](Install-HighwayNotation.ps1).
 
 ### Manual (all platforms)
 

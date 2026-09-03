@@ -1,30 +1,24 @@
 <#
 Highway Notation installer.
 
-Copies the three folders that ship next to this script into the right
-places inside a FeedBack install:
-  - highway_notation\  -> <FeedBack>\resources\slopsmith\plugins\highway_notation
-  - highway_3d\        -> <FeedBack>\resources\slopsmith\plugins\highway_3d
-  - static\             -> <FeedBack>\resources\slopsmith\  (merged, not replaced)
+Self-contained via a self-extracting-archive trick: the compiled .exe of
+this script has the plugin payload (a zip of highway_notation/, highway_3d/,
+static/) appended as raw bytes after a fixed marker string. At runtime this
+reads ITS OWN .exe file, finds the marker, and treats everything after it
+as the zip — no ps2exe compiler involvement for the payload at all (that's
+what corrupted it when the payload was embedded as a PowerShell string
+literal/array instead). Doesn't need any other files sitting next to it,
+including when run straight out of Explorer's zip preview.
 
-Run this from the extracted release folder (it expects highway_notation\,
-highway_3d\, and static\ as siblings of this script).
+When run as a plain .ps1 (marker not found — nothing's been appended), it
+falls back to looking for a sibling payload.zip, for local testing without
+a full ps2exe rebuild each time.
 #>
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# $PSScriptRoot is empty inside a ps2exe-compiled binary (it's only
-# populated when running the raw .ps1 from disk), so this reads the
-# running process's own .exe path instead — works both compiled and as
-# a plain script (falls back to $PSScriptRoot there).
-if ($PSScriptRoot) {
-    $ScriptRoot = $PSScriptRoot
-}
-else {
-    $ScriptRoot = Split-Path -Parent ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
-}
-$SourceFolders = @('highway_notation', 'highway_3d', 'static')
+$PayloadMarker = [System.Text.Encoding]::ASCII.GetBytes('===HWN_PAYLOAD_START===')
 
 function Show-Info($text, $title = 'Highway Notation Installer') {
     [System.Windows.Forms.MessageBox]::Show($text, $title, 'OK', 'Information') | Out-Null
@@ -64,14 +58,49 @@ function Find-FeedBackRoot {
     return $null
 }
 
-# Verify this script actually has its payload folders sitting next to it
-# before doing anything else.
-foreach ($folder in $SourceFolders) {
-    $p = Join-Path $ScriptRoot $folder
-    if (-not (Test-Path $p)) {
-        Show-ErrorBox "Missing folder: $folder`n`nThis script needs to run from inside the extracted Highway Notation release folder, with highway_notation\, highway_3d\, and static\ next to it."
-        exit 1
+# Finds $PayloadMarker in a byte array (own .exe file's bytes), returns the
+# index right after the LAST occurrence of the marker, or -1 if not found.
+# Must search from the END backward, not forward from the start — ps2exe
+# embeds this script's own source text inside the compiled exe (for the
+# runtime to execute), and that embedded copy contains this same marker
+# string as a literal, so a forward search finds THAT one instead of the
+# real appended payload, which is always the true last occurrence.
+function Find-MarkerEnd($bytes, $marker) {
+    $mLen = $marker.Length
+    for ($i = $bytes.Length - $mLen; $i -ge 0; $i--) {
+        $match = $true
+        for ($j = 0; $j -lt $mLen; $j++) {
+            if ($bytes[$i + $j] -ne $marker[$j]) { $match = $false; break }
+        }
+        if ($match) { return $i + $mLen }
     }
+    return -1
+}
+
+function Get-PayloadBytes {
+    $ownPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $ownBytes = [System.IO.File]::ReadAllBytes($ownPath)
+    $start = Find-MarkerEnd $ownBytes $PayloadMarker
+    if ($start -ge 0) {
+        $len = $ownBytes.Length - $start
+        $payload = New-Object byte[] $len
+        [System.Array]::Copy($ownBytes, $start, $payload, 0, $len)
+        return $payload
+    }
+    # Dev fallback: no marker (running as a plain .ps1) — use a sibling
+    # payload.zip if one exists, so this can be tested without a full
+    # ps2exe + append rebuild every time.
+    $sibling = Join-Path (Split-Path -Parent $ownPath) 'payload.zip'
+    if (Test-Path $sibling) {
+        return [System.IO.File]::ReadAllBytes($sibling)
+    }
+    return $null
+}
+
+$payloadBytes = Get-PayloadBytes
+if (-not $payloadBytes) {
+    Show-ErrorBox "Couldn't find the installer's payload data. This .exe may be corrupted or incomplete — try re-downloading it."
+    exit 1
 }
 
 $feedbackRoot = Find-FeedBackRoot
@@ -100,13 +129,21 @@ if (-not (Ask-YesNo $confirmMsg)) {
     exit 0
 }
 
+$tempRoot = Join-Path $env:TEMP ('HighwayNotationInstall_' + [guid]::NewGuid().ToString('N'))
+
 try {
+    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    $tempZip = Join-Path $tempRoot 'payload.zip'
+    [System.IO.File]::WriteAllBytes($tempZip, $payloadBytes)
+    $extractDir = Join-Path $tempRoot 'extracted'
+    Expand-Archive -Path $tempZip -DestinationPath $extractDir -Force
+
     # Plugin folders: straight overwrite (Copy-Item -Force merges files,
     # -Recurse walks subfolders — this does NOT delete files that exist in
     # the destination but not the source, same caveat as the static merge
     # below).
-    Copy-Item -Path (Join-Path $ScriptRoot 'highway_notation') -Destination $pluginsDir -Recurse -Force
-    Copy-Item -Path (Join-Path $ScriptRoot 'highway_3d') -Destination $pluginsDir -Recurse -Force
+    Copy-Item -Path (Join-Path $extractDir 'highway_notation') -Destination $pluginsDir -Recurse -Force
+    Copy-Item -Path (Join-Path $extractDir 'highway_3d') -Destination $pluginsDir -Recurse -Force
 
     # static\: this repo's static\ only carries the two patched files
     # (highway.js, js\highway-draw.js), not a full copy of FeedBack's real
@@ -114,11 +151,14 @@ try {
     if (-not (Test-Path $staticDir)) {
         New-Item -ItemType Directory -Path $staticDir -Force | Out-Null
     }
-    Copy-Item -Path (Join-Path $ScriptRoot 'static\*') -Destination $staticDir -Recurse -Force
+    Copy-Item -Path (Join-Path $extractDir 'static\*') -Destination $staticDir -Recurse -Force
 
     Show-Info "Installed successfully.`n`nRestart FeedBack to activate."
 }
 catch {
     Show-ErrorBox "Something went wrong during install:`n`n$($_.Exception.Message)"
     exit 1
+}
+finally {
+    Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

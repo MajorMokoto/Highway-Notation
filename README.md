@@ -17,6 +17,12 @@ This isn't a single drop-in plugin — the download has three folders, and they 
 3. **Updated 2D Highway** (Required for notes to display on 2D Highway)
    `static` folder install location: `feedback\current\resources\slopsmith\`
 
+Paths above are for Windows. On other platforms, the `resources\slopsmith\` folder lives in a different place:
+
+- **Windows** (confirmed): `<install dir>\current\resources\slopsmith\`
+- **macOS** (not yet verified): `/Applications/FeedBack.app/Contents/Resources/slopsmith/`
+- **Linux** (not yet verified): varies by install method — an AppImage needs to be extracted (`--appimage-extract`) to get a real folder to drop files into; a `.deb` install is likely under `/opt/Feedback/resources/slopsmith/`
+
 ## 3D Highway
 
 <table><tr>

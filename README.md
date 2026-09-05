@@ -33,14 +33,14 @@ Paths above are for Windows. On other platforms, the `resources\slopsmith\` fold
 
 <table><tr>
 <td width="50%"><img src="Screenshots/3D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — gems hidden</sub></td>
+<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — frets numbers hidden</sub></td>
 </tr></table>
 
 ## 2D Highway
 
 <table><tr>
 <td width="50%"><img src="Screenshots/2D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — gems hidden</sub></td>
+<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — frets numbers hidden</sub></td>
 </tr></table>
 
 ![Letter position can be dragged off the fret number](Screenshots/2D%20Highway%20Note%20Letter%20Offset.PNG)

@@ -27,7 +27,7 @@ Paths above are for Windows. On other platforms, the `resources\slopsmith\` fold
 
 - **Windows**: `C:\Program Files\feedback\current\resources\slopsmith\plugins\`
 - **macOS**: `/Applications/FeedBack.app/Contents/Resources/slopsmith/`
-- **Linux**: varies by install method — an AppImage needs to be extracted (`--appimage-extract`) to get a real folder to drop files into; a `.deb` install is likely under `/opt/Feedback/resources/slopsmith/`
+- **Linux**: varies by install method — an AppImage needs to be extracted (`--appimage-extract`) to get a real folder to drop files into; a `.deb` install is likely under `/home/user/.config/feedback-desktop/plugins/`
 
 ## 3D Highway
 

@@ -1154,6 +1154,15 @@
                     }
                 }
             }
+            // Scale-overlay suppression only ever applies to a note's own
+            // plain letter (overrideText null) — a real chord-name label
+            // (overrideText set, chordMode 'name') is a distinct on-screen
+            // element from the note letters it's replacing and must never be
+            // hidden just because this representative gem's own letter is
+            // redundant with the scale overlay. See letterSuppressed's own
+            // comment at the push site for why this used to drop the whole
+            // chord instead of just its per-note letters.
+            if (!overrideText && g.letterSuppressed) continue;
             const letter = overrideText || noteLetter(tuning, capo, arrangement, g.s, g.f);
             if (!letter || !Number.isFinite(g.fontPxUnit)) continue;
             // Drag-pad offset (settings.offsetX/Y, each -1..1) scaled by this
@@ -1709,7 +1718,23 @@
                 // tried here (STRIKE_SUPPRESS_LAG_SEC) but caused the gem's
                 // own letter to visibly overlap the static board letter
                 // right at the hit line, so it was dropped 2026-09-06.
-                if (hasStaticReplacement && g.t <= nowT) continue;
+                //
+                // NOTE: this no longer drops the entry outright. It used to
+                // (`continue` here), which silently removed a struck note
+                // from `entries` — fine for a standalone note (nothing else
+                // needed it), but it also removed every note of a STRUCK
+                // CHORD whose tones all happened to be scale tones (the
+                // common case), leaving renderNoteLetters with fewer than 2
+                // entries in that onset's time-bucket, so it could never
+                // detect a chord there at all — the chord name silently
+                // stopped drawing the instant a chord struck while the scale
+                // overlay was on (bug found live 2026-09-09). The overlay
+                // should only suppress a note's OWN plain letter (redundant
+                // with the static board mark), never the separate chord-name
+                // label drawn once per chord — so the entry now always gets
+                // pushed, tagged instead, and renderNoteLetters applies the
+                // suppression only to the plain-letter draw path.
+                const letterSuppressed = hasStaticReplacement && g.t <= nowT;
                 // NDC (-1..1, +y up) -> canvas pixels (+y down).
                 const px = ((g.sx + 1) / 2) * overlay.width;
                 const py = ((1 - g.sy) / 2) * overlay.height;
@@ -1721,7 +1746,7 @@
                 // settings.chordSizeK, split 2026-09-05 into two independent
                 // sliders). Previously baked sizeK in here directly since
                 // there was only ever one size setting.
-                entries.push({ s: g.s, f: g.f, t: g.t, px, py, fontPxUnit: pxPerK });
+                entries.push({ s: g.s, f: g.f, t: g.t, px, py, fontPxUnit: pxPerK, letterSuppressed });
             }
             // Chord-frame bridge (window.__h3dChordFramePositions, core 2026-09-05):
             // the strum-bar frame's real screen quad per visible chord, so a

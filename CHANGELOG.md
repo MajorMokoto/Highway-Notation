@@ -27,6 +27,12 @@ publish, this becomes the release notes and then resets.
   (captured live from the running settings pane): chord letter size 6
   (was 5), scale overlay shows note letters instead of dots, scale overlay
   colors match string color, chord name position nudged (offsetX/Y)
+- Fixed: chord name stopped drawing entirely when a struck chord's notes
+  were all scale tones with the scale overlay on (3D) — the overlay's
+  per-note suppression was accidentally removing the chord's notes before
+  the chord-name grouping logic ever saw them. Individual note letters
+  are still suppressed the same as before; only the separate chord-name
+  label is now exempt.
 
 <!--
 When a real GitHub release is cut, move this list into the release notes,

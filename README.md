@@ -18,10 +18,10 @@ This isn't a single drop-in plugin — the download has three folders, and they 
    `highway_notation` folder install location: `feedback\current\resources\slopsmith\plugins\`
 
 2. **Updated 3D Highway** (Required for notes to display on 3D Highway)
-   `highway_3d` folder install location: `feedback\current\resources\slopsmith\plugins\`
+   `highway_3d\screen.js` and `highway_3d\settings.html` install location: `feedback\current\resources\slopsmith\plugins\highway_3d\` (overwrite just these two files — the rest of your existing highway_3d folder stays as-is)
 
 3. **Updated 2D Highway** (Required for notes to display on 2D Highway)
-   `static` folder install location: `feedback\current\resources\slopsmith\`
+   `static` folder install location: `feedback\current\resources\slopsmith\` (adds/overwrites `highway.js`, `js\highway-draw.js`, and `js\highway-state-primitives.js`)
 
 Paths above are for Windows. On other platforms, the `resources\slopsmith\` folder lives in a different place:
 
@@ -33,14 +33,14 @@ Paths above are for Windows. On other platforms, the `resources\slopsmith\` fold
 
 <table><tr>
 <td width="50%"><img src="Screenshots/3D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — gems hidden</sub></td>
+<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret markers hidden</sub></td>
 </tr></table>
 
 ## 2D Highway
 
 <table><tr>
 <td width="50%"><img src="Screenshots/2D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — gems hidden</sub></td>
+<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret markers hidden</sub></td>
 </tr></table>
 
 ![Letter position can be dragged off the fret number](Screenshots/2D%20Highway%20Note%20Letter%20Offset.PNG)

@@ -69,6 +69,65 @@ import {
     strumGroupBuckets,
 } from './js/highway-draw.js';
 
+// Natural-note letter -> pitch class (0=C). Mirrors lib/song.py's
+// _KEY_LETTER_PC exactly, module-scope since it's a pure lookup table, not
+// per-instance state.
+const _KEY_LETTER_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+// Parses a keys.json key name (spec §7.7) to its tonic pitch class 0..11 —
+// e.g. "E", "Em", "A#m", "Bb", "F#" -> 4, 4, 10, 10, 6. Mode/quality suffix
+// is irrelevant to the tonic and ignored. Returns null for anything not
+// starting with a valid note letter. Mirrors lib/song.py's
+// key_to_tonic_pc() exactly so a plugin's notion of "root" matches core's
+// own teaching-mark ("sd") derivation.
+function _keyToTonicPc(key) {
+    if (typeof key !== 'string') return null;
+    const s = key.trim();
+    if (!s) return null;
+    let pc = _KEY_LETTER_PC[s[0].toUpperCase()];
+    if (pc === undefined) return null;
+    for (let i = 1; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '#' || ch === '♯') pc += 1;
+        else if (ch === 'b' || ch === '♭') pc -= 1;
+        else break;
+    }
+    return ((pc % 12) + 12) % 12;
+}
+
+// Gradual-nudge fix for getTime()'s interpolation snap (2026-09-04, stutter
+// investigation — see [[highway3d-chord-double-render-stutter-suspect]]'s
+// addendum for the full writeup): getTime() interpolates between real
+// setTime() updates using performance.now() elapsed since the last anchor.
+// Real updates land slower than the display can refresh (esp. on high
+// refresh-rate monitors), so the interpolated guess can run AHEAD of where
+// the next real update actually lands. setTime() used to just hard-reset the
+// anchor to the new real value with no reconciliation, so a getTime() call
+// right after could return a SMALLER number than a moment ago — a visible
+// backward time jump/stutter, worse the more interpolated frames happened in
+// between (i.e. worse at higher refresh rates, matching what a community fix
+// attempt independently proposed and what Leah observed at 144Hz).
+//
+// Fix: instead of snapping, setTime() records how far the just-reset anchor
+// differs from what getTime() was ABOUT to report (the "display error"), and
+// getTime() blends that error back out linearly over _CHART_DISPLAY_SMOOTH_MS
+// instead of applying it all at once. The real chart clock (chartTime,
+// setTime's own anchor) is NEVER touched by this — only what getTime()
+// reports to plugins during the smoothing window. A large error (seek,
+// pause/resume, rate change) is NOT smoothed — see SEEK_SNAP_THRESHOLD_S in
+// setTime() — only small overshoot-correction jumps are.
+// 2026-09-04, tuning pass: widened from 80ms after live wobble-tracking data
+// showed the rate-EMA change (setTime(), _chartObservedRate) trading lots of
+// tiny continuous corrections for fewer, BIGGER ones — spreading whatever
+// correction remains over more time makes it read as a fade rather than a
+// discrete hitch, at the cost of the correction being "in flight" longer.
+const _CHART_DISPLAY_SMOOTH_MS = 150;
+function _chartDisplayErrorRemaining(hwState, nowP) {
+    if (Number.isNaN(hwState._chartDisplayErrorStartPerfNow) || hwState._chartDisplayError === 0) return 0;
+    const frac = Math.max(0, 1 - (nowP - hwState._chartDisplayErrorStartPerfNow) / _CHART_DISPLAY_SMOOTH_MS);
+    return hwState._chartDisplayError * frac;
+}
+
 function createHighway() {
   // R3c: per-instance mutable state in one object, so extracted renderer/ws
   // modules can close over it as a factory arg without cross-panel sharing.
@@ -182,6 +241,12 @@ function createHighway() {
     // causing getTime() to return NaN.
     hwState._chartAnchorAudioT = NaN;
     hwState._chartAnchorPerfNow = NaN;
+    // Display-smoothing state (see getTime()/setTime() below, "gradual
+    // nudge" fix): 0 = the interpolated estimate and the real anchor
+    // agreed at the moment of the last re-anchor, so getTime() reports the
+    // real value exactly with no correction in flight.
+    hwState._chartDisplayError = 0;
+    hwState._chartDisplayErrorStartPerfNow = NaN;
     // Pause detection: the 60Hz tick in app.js keeps calling setTime()
     // even while paused (with a stalled audio clock). Track when t last
     // ADVANCED (not just when setTime was called) — if it's been still
@@ -224,6 +289,9 @@ function createHighway() {
     hwState.sections = [];
     hwState.anchors = [];
     hwState.chordTemplates = [];
+    // Song-level key/scale track (keys.json, spec §7.7) — [{t, key}], sorted
+    // by time. Optional per-song; empty when the sloppak doesn't ship one.
+    hwState.keys = [];
     // Number of strings on the active arrangement. Updated from the
     // `stringCount` field in each `song_info` WS message; falls back
     // to `tuning.length` (works for older servers that don't yet emit
@@ -710,8 +778,8 @@ function createHighway() {
         draw(/* bundle */) {
             // Still reads from the factory closure directly — the bundle
             // is shaped for custom renderers, not used here. Keeping the
-            // default renderer's body unchanged from the pre-refactor
-            // draw() preserves pixel-level parity with current main.
+            // default renderer's body unchanged preserves pixel-level
+            // parity with the original draw().
             if (!hwState.canvas || !hwState.ready || !hwState.ctx) return;
             try {
                 const W = hwState.canvas.width;
@@ -1297,7 +1365,7 @@ function createHighway() {
         // rendering resumes and the flag is still on. (#654)
         if (hwState._perfHud && (!_rendering || !hwState.ready)) { hwState._perfHud.remove(); hwState._perfHud = null; }
         if (!_rendering) return;
-        // Match pre-refactor behaviour: skip draw until WS ready fires.
+        // Skip draw until WS ready fires.
         // This gates out the brief "arrays cleared, WS reconnecting"
         // window during playSong / reconnect. Renderers that want to
         // draw a loading state can still opt in via the `isReady`
@@ -1746,7 +1814,7 @@ function createHighway() {
             hwState._resizeHandler = () => this.resize();
             window.addEventListener('resize', hwState._resizeHandler);
             hwState.ready = false;
-            hwState.notes = []; hwState.chords = []; hwState.handShapes = []; hwState.beats = []; hwState.sections = []; hwState.anchors = []; hwState.chordTemplates = []; hwState.lyrics = []; hwState.lyricsSource = ""; hwState.toneChanges = []; hwState.toneBase = ""; hwState.drumTab = null;
+            hwState.notes = []; hwState.chords = []; hwState.handShapes = []; hwState.beats = []; hwState.sections = []; hwState.anchors = []; hwState.chordTemplates = []; hwState.lyrics = []; hwState.lyricsSource = ""; hwState.toneChanges = []; hwState.toneBase = ""; hwState.drumTab = null; hwState.keys = [];
             hwState.stringCount = 6;  // default until song_info arrives
             // Reset phrase ladder + filter (feedBack#48). _mastery
             // persists across arrangement switches — the slider's
@@ -2435,6 +2503,7 @@ function createHighway() {
                             }
                             break;
                         case 'sections': hwState.sections = msg.data; break;
+                        case 'keys': hwState.keys = msg.data; break;
                         case 'anchors':
                             hwState.anchors = msg.data;
                             if (hwState.anchors.length) {
@@ -2553,11 +2622,65 @@ function createHighway() {
                 // dt (would divide by ~0). Clamp to a sane window so
                 // a noisy seek doesn't poison the estimate.
                 const hadPriorAnchor = !Number.isNaN(hwState._chartAnchorPerfNow);
+
+                // Display-smoothing (see _chartDisplayErrorRemaining above):
+                // capture how far what getTime() was ABOUT to report (under
+                // the OLD anchor, including any still-decaying error from a
+                // previous correction) differs from the new real value `t`,
+                // BEFORE the anchor below gets overwritten. Skipped entirely
+                // when we were stalled/paused — there's no interpolated
+                // guess to have overshot in that case, getTime() was already
+                // returning the raw, exact chartTime.
+                {
+                    let rawError = 0;
+                    if (hadPriorAnchor && (newPerfNow - hwState._chartLastAdvanceAt) <= _CHART_MAX_INTERP_MS) {
+                        const elapsedMs = newPerfNow - hwState._chartAnchorPerfNow;
+                        const rawEstimate = hwState._chartAnchorAudioT + (hwState._chartObservedRate * elapsedMs) / 1000;
+                        const displayedEstimate = rawEstimate + _chartDisplayErrorRemaining(hwState, newPerfNow);
+                        rawError = displayedEstimate - t;
+                    }
+                    // A real seek / pause-resume / rate-change discontinuity
+                    // produces a much bigger jump than interpolation
+                    // overshoot ever would — smoothing THAT would make
+                    // seeking feel laggy, so only small corrections get the
+                    // gradual-nudge treatment; anything bigger snaps
+                    // immediately, same as before this fix.
+                    const SEEK_SNAP_THRESHOLD_S = 0.25;
+                    hwState._chartDisplayError = Math.abs(rawError) > SEEK_SNAP_THRESHOLD_S ? 0 : rawError;
+                    hwState._chartDisplayErrorStartPerfNow = newPerfNow;
+                }
+
                 const dPerf = hadPriorAnchor ? (newPerfNow - hwState._chartAnchorPerfNow) / 1000 : 0;
                 if (hadPriorAnchor && dPerf > 0.001 && dPerf < 0.5) {
                     const observed = (t - hwState._chartAnchorAudioT) / dPerf;
                     if (observed > 0.05 && observed < 5) {
-                        hwState._chartObservedRate = observed;
+                        // Blended (EMA) instead of a straight overwrite —
+                        // 2026-09-04, small-scale jitter fix (see
+                        // [[highway3d-chord-double-render-stutter-suspect]]'s
+                        // later addenda). audio.currentTime has its own small
+                        // per-update quantization noise; fully trusting each
+                        // single segment's rate estimate let that noise
+                        // propagate straight into the interpolated position
+                        // every frame (confirmed live: real, continuous
+                        // sub-pixel wobble on rendered notes, worse near the
+                        // strike zone from perspective amplification — NOT
+                        // the big-overshoot case the display-error smoothing
+                        // above already handles, this is a different, smaller
+                        // and more constant source). ~0.3 weight to the
+                        // newest sample blends across roughly the last 3-4
+                        // real updates, damping single-sample noise while
+                        // still tracking genuine rate changes (speed slider)
+                        // within a few updates.
+                        // 2026-09-04, tuning pass: the original 0.7/0.3
+                        // blend traded continuous small wobble for fewer but
+                        // BIGGER discrete corrections (confirmed live — the
+                        // rate lagged real updates enough that the resulting
+                        // per-update gap grew, then had to be corrected in
+                        // one bigger dose). 0.5/0.5 tracks real updates more
+                        // closely, keeping corrections smaller — paired with
+                        // widening _CHART_DISPLAY_SMOOTH_MS below so whatever
+                        // correction still happens reads as a fade, not a hitch.
+                        hwState._chartObservedRate = hwState._chartObservedRate * 0.5 + observed * 0.5;
                     } else {
                         // Out-of-band rate (seek discontinuity, loop wrap,
                         // negative jump back). We can't measure rate from
@@ -2626,7 +2749,13 @@ function createHighway() {
             // chartTime that setTime() / the early-return branches
             // expose — anchors are stored in raw audio time, so the
             // offset is applied on the way out.
-            return hwState._chartAnchorAudioT + (hwState._chartObservedRate * elapsedMs) / 1000 + hwState.songOffset;
+            const raw = hwState._chartAnchorAudioT + (hwState._chartObservedRate * elapsedMs) / 1000;
+            // Display-smoothing correction (see _chartDisplayErrorRemaining /
+            // setTime() above): blends out any recent interpolation-overshoot
+            // jump over _CHART_DISPLAY_SMOOTH_MS instead of the old
+            // instant-snap behavior. 0 once the window's elapsed, or whenever
+            // there was nothing to correct — a no-op in the common case.
+            return raw + _chartDisplayErrorRemaining(hwState, nowP) + hwState.songOffset;
         },
         // Returns the feedBack <audio> element so plugins don't have to
         // reach for `document.getElementById('audio')` directly. In JUCE
@@ -2725,6 +2854,34 @@ function createHighway() {
         getToneChanges() { return hwState.toneChanges; },
         getToneBase() { return hwState.toneBase; },
         getSections() { return hwState.sections; },
+        // Song-level key/scale track (keys.json, spec §7.7): [{t, key}],
+        // sorted by time — a song can modulate, so this is a timeline, not
+        // one static value. Empty when the sloppak doesn't ship one.
+        getKeys() { return hwState.keys; },
+        // Tonic pitch class (0=C..11=B) active at time t, or null if no keys
+        // track exists or t is before the first key event. Mirrors core's own
+        // key_to_tonic_pc() (lib/song.py) + _fill_scale_degree()'s bisect
+        // (lib/routers/ws_highway.py) exactly, so a plugin's root-note
+        // highlighting matches the teaching-mark "sd" field's own notion of
+        // root, not a separately-invented one.
+        getKeyTonicAt(t) {
+            const keys = hwState.keys;
+            if (!Array.isArray(keys) || !keys.length) return null;
+            let lo = 0, hi = keys.length - 1, idx = -1;
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                if (keys[mid].t <= t) { idx = mid; lo = mid + 1; }
+                else { hi = mid - 1; }
+            }
+            if (idx < 0) return null;
+            return _keyToTonicPc(keys[idx].key);
+        },
+        // Parses a key string ("A", "F#", "Bb"...) to a tonic pitch class
+        // (0=C..11=B), or null if unparseable. Exposes the same letter-name
+        // parser getKeyTonicAt() uses internally, for a plugin that has its
+        // own key string from somewhere other than the keys.json track (e.g.
+        // Virtuoso's own live jam-session key) and wants it read consistently.
+        parseKeyToTonicPc(key) { return _keyToTonicPc(key); },
         // Timed lyric syllables for the active song: [{t: start, d: length,
         // w: word}], same array the highway WS populates. Exposed so overlay
         // plugins (e.g. stream_kit vocals) can render karaoke without a second
@@ -2928,7 +3085,7 @@ function createHighway() {
             // Close old WS but keep audio + animation running
             if (hwState.ws) { hwState.ws.close(); hwState.ws = null; }
             hwState.ready = false;
-            hwState.notes = []; hwState.chords = []; hwState.handShapes = []; hwState.beats = []; hwState.sections = []; hwState.anchors = []; hwState.chordTemplates = []; hwState.lyrics = []; hwState.lyricsSource = ""; hwState.toneChanges = []; hwState.toneBase = ""; hwState.drumTab = null;
+            hwState.notes = []; hwState.chords = []; hwState.handShapes = []; hwState.beats = []; hwState.sections = []; hwState.anchors = []; hwState.chordTemplates = []; hwState.lyrics = []; hwState.lyricsSource = ""; hwState.toneChanges = []; hwState.toneBase = ""; hwState.drumTab = null; hwState.keys = [];
             hwState.stringCount = 6;  // default until song_info arrives
             // Drop any per-song offset from the previous load so setTime
             // calls that fire before the next song_info arrives don't
@@ -3008,6 +3165,8 @@ function createHighway() {
             hwState._chartAnchorPerfNow = NaN;
             hwState._chartLastAdvanceAt = 0;
             hwState._chartObservedRate = 1;
+            hwState._chartDisplayError = 0;
+            hwState._chartDisplayErrorStartPerfNow = NaN;
             // Release the renderer's GPU / DOM / event-listener resources
             // when leaving the player — anything it allocated in init()
             // should be torn down here so navigating away doesn't leak.

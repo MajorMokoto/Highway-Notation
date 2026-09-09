@@ -2397,7 +2397,7 @@
         return _bgBandsCache;
     }
 
-    const BG_DEFAULTS = { style: 'particles', intensity: 0.5, reactive: true, palette: 'default', bgTheme: 'default', hwTheme: 'default', showFretOnNote: true, fretNumberGhostScope: 'chords', flyingFretLabelVisible: true, chordBaseFretLabelsVisible: true, dynamicFretRowVisible: true, gemBodyVisible: true, openGemBodyVisible: true, palmMuteMarkerVisible: true, fretHandMuteMarkerVisible: true, chordNameVisible: true, cameraSmoothing: 0.5, zoomSmoothing: 0.5, tiltSmoothing: 0.5, cameraLockLow: false, cameraLockZoom: 0.5, cameraMode: 'lookahead', nutHeadstockVisible: true, tuningLabelsVisible: true, nutColor: '#f5f3f0', headstockColor: '#d4b48a', textSize: 0.5, vibrancy: 0.85, glow: 0.25, customImageDataUrl: '', customImageName: '', customVideoName: '', chordDiagramVisible: true, chordDiagramSize: 0.5, chordDiagramPosition: 'tl', fretColumnMarkerCadence: 1, projectionVisible: true, inlayLabelsVisible: false, sectionLabelsOnHighway: false, sectionHudVisible: false, sectionHudPosition: 'tr', sectionHudSize: 0.5, toneHudVisible: false, toneHudPosition: 'tl', toneHudSize: 0.5, fpsVisible: false, fretDividersVisible: true, slideArrowApproachVisible: true, slideArrowNeckVisible: true, slideArrowChainPreviewVisible: true, hitFx: 0.7, sparks: true, cinematic: true, verdictMarks: true, timingFx: true, streakFx: true, bloom: true };
+    const BG_DEFAULTS = { style: 'particles', intensity: 0.5, reactive: true, palette: 'default', bgTheme: 'default', hwTheme: 'default', showFretOnNote: true, fretNumberGhostScope: 'chords', flyingFretLabelVisible: true, chordBaseFretLabelsVisible: true, dynamicFretRowVisible: true, gemBodyVisible: true, openGemBodyVisible: true, chordGemBodyVisible: true, chordOpenGemBodyVisible: true, palmMuteMarkerVisible: true, fretHandMuteMarkerVisible: true, chordNameVisible: true, cameraSmoothing: 0.5, zoomSmoothing: 0.5, tiltSmoothing: 0.5, cameraLockLow: false, cameraLockZoom: 0.5, cameraMode: 'lookahead', nutHeadstockVisible: true, tuningLabelsVisible: true, stringLinesVisible: true, inlayDotsVisible: true, fretWiresVisible: true, nutColor: '#f5f3f0', headstockColor: '#d4b48a', textSize: 0.5, vibrancy: 0.85, glow: 0.25, customImageDataUrl: '', customImageName: '', customVideoName: '', chordDiagramVisible: true, chordDiagramSize: 0.5, chordDiagramPosition: 'tl', fretColumnMarkerCadence: 1, projectionVisible: true, inlayLabelsVisible: false, sectionLabelsOnHighway: false, sectionHudVisible: false, sectionHudPosition: 'tr', sectionHudSize: 0.5, toneHudVisible: false, toneHudPosition: 'tl', toneHudSize: 0.5, fpsVisible: false, fretDividersVisible: true, slideArrowApproachVisible: true, slideArrowNeckVisible: true, slideArrowChainPreviewVisible: true, hitFx: 0.7, sparks: true, cinematic: true, verdictMarks: true, timingFx: true, streakFx: true, bloom: true };
     // User-selectable, persistable bg styles — must mirror settings.html's
     // VALID_STYLES. 'venue' is deliberately NOT here: it is an internal effective
     // style reached only via _venueSceneOverride (the viz-picker Venue flow), so
@@ -2764,6 +2764,14 @@
     // localStorage overrides still win because they're an explicit
     // per-instance opt-out and shouldn't be shadowed by a global edit.
     const _bgMemFallback = Object.create(null);
+    // One-time cleanup: inlayDotsVisible used to be persisted via the normal
+    // _bgWriteGlobal path before it was switched to _bgWriteGlobalTransient
+    // (memory-only). Anyone who had it saved as 'false' from that earlier
+    // version would otherwise load hidden forever with no code left running
+    // to ever set it back — removing any stale persisted copy here means an
+    // existing install self-heals on its very next load, no manual
+    // localStorage clear required.
+    try { localStorage.removeItem('h3d_bg_inlayDotsVisible'); } catch (_) { /* storage blocked */ }
     function _bgReadSetting(panelKey, key) {
         let panelVal = null;
         let globalVal = null;
@@ -2807,7 +2815,7 @@
     // means (fall back to default rather than silently flipping to
     // false). Add new boolean keys to BG_DEFAULTS and they pick this
     // up via the dispatch below.
-    const _BG_BOOL_KEYS = new Set(['reactive', 'showFretOnNote', 'flyingFretLabelVisible', 'chordBaseFretLabelsVisible', 'dynamicFretRowVisible', 'gemBodyVisible', 'openGemBodyVisible', 'palmMuteMarkerVisible', 'fretHandMuteMarkerVisible', 'chordNameVisible', 'cameraLockLow', 'inlayLabelsVisible', 'sectionLabelsOnHighway', 'sectionHudVisible', 'nutHeadstockVisible', 'tuningLabelsVisible', 'projectionVisible', 'chordDiagramVisible', 'fpsVisible', 'toneHudVisible', 'fretDividersVisible', 'slideArrowApproachVisible', 'slideArrowNeckVisible', 'slideArrowChainPreviewVisible', 'sparks', 'cinematic', 'verdictMarks', 'timingFx', 'streakFx', 'bloom']);
+    const _BG_BOOL_KEYS = new Set(['reactive', 'showFretOnNote', 'flyingFretLabelVisible', 'chordBaseFretLabelsVisible', 'dynamicFretRowVisible', 'gemBodyVisible', 'openGemBodyVisible', 'chordGemBodyVisible', 'chordOpenGemBodyVisible', 'palmMuteMarkerVisible', 'fretHandMuteMarkerVisible', 'chordNameVisible', 'cameraLockLow', 'inlayLabelsVisible', 'sectionLabelsOnHighway', 'sectionHudVisible', 'nutHeadstockVisible', 'tuningLabelsVisible', 'stringLinesVisible', 'inlayDotsVisible', 'fretWiresVisible', 'projectionVisible', 'chordDiagramVisible', 'fpsVisible', 'toneHudVisible', 'fretDividersVisible', 'slideArrowApproachVisible', 'slideArrowNeckVisible', 'slideArrowChainPreviewVisible', 'sparks', 'cinematic', 'verdictMarks', 'timingFx', 'streakFx', 'bloom']);
     function _bgCoerceBool(val, fallback) {
         if (val === 'true' || val === '1') return true;
         if (val === 'false' || val === '0') return false;
@@ -2883,6 +2891,21 @@
         try { localStorage.setItem('h3d_bg_' + key, s); } catch (_) { /* storage blocked */ }
         _bgEmitChange(key);
     }
+    // Same as _bgWriteGlobal but NEVER persisted to localStorage — for a
+    // setting that's a live signal driven entirely by an external plugin
+    // (e.g. window.h3dBgSetInlayDotsVisible, hidden/shown by highway_notation
+    // as its own scale overlay comes and goes), not a normal user preference.
+    // Staying memory-only means a fresh page load always starts from
+    // BG_DEFAULTS regardless of what state the driving plugin left things in
+    // last session — it can never get permanently stuck off if that plugin
+    // crashes, gets removed, or is disabled while the value happened to be
+    // false. Still routes through _bgMemFallback + _bgEmitChange so
+    // _bgReadSetting/the live dispatch pub-sub both work exactly the same as
+    // any other setting for the lifetime of the current session.
+    function _bgWriteGlobalTransient(key, val) {
+        _bgMemFallback[key] = String(val);
+        _bgEmitChange(key);
+    }
 
     // Pub-sub so settings.html can update live across all panel instances.
     const _bgListeners = new Set();
@@ -2935,6 +2958,8 @@
     window.h3dBgSetDynamicFretRowVisible = (v) => _bgWriteGlobal('dynamicFretRowVisible', !!v);
     window.h3dBgSetGemBodyVisible = (v) => _bgWriteGlobal('gemBodyVisible', !!v);
     window.h3dBgSetOpenGemBodyVisible = (v) => _bgWriteGlobal('openGemBodyVisible', !!v);
+    window.h3dBgSetChordGemBodyVisible = (v) => _bgWriteGlobal('chordGemBodyVisible', !!v);
+    window.h3dBgSetChordOpenGemBodyVisible = (v) => _bgWriteGlobal('chordOpenGemBodyVisible', !!v);
     window.h3dBgSetPalmMuteMarkerVisible = (v) => _bgWriteGlobal('palmMuteMarkerVisible', !!v);
     window.h3dBgSetFretHandMuteMarkerVisible = (v) => _bgWriteGlobal('fretHandMuteMarkerVisible', !!v);
     window.h3dBgSetChordNameVisible = (v) => _bgWriteGlobal('chordNameVisible', !!v);
@@ -2954,6 +2979,9 @@
     };
     window.h3dBgSetNutHeadstockVisible = (v) => _bgWriteGlobal('nutHeadstockVisible', !!v);
     window.h3dBgSetTuningLabelsVisible = (v) => _bgWriteGlobal('tuningLabelsVisible', !!v);
+    window.h3dBgSetStringLinesVisible = (v) => _bgWriteGlobal('stringLinesVisible', !!v);
+    window.h3dBgSetInlayDotsVisible = (v) => _bgWriteGlobalTransient('inlayDotsVisible', !!v);
+    window.h3dBgSetFretWiresVisible = (v) => _bgWriteGlobal('fretWiresVisible', !!v);
     window.h3dBgSetNutColor = (v) => _bgWriteGlobal('nutColor', v);
     window.h3dBgSetHeadstockColor = (v) => _bgWriteGlobal('headstockColor', v);
     window.h3dBgSetTextSize = (v) => _bgWriteGlobal('textSize', v);
@@ -4853,6 +4881,16 @@
         // with gems hidden.
         let gemBodyVisible = true;
         let openGemBodyVisible = true;
+        // Chord gem body visibility, added 2026-09-05 for
+        // [[highway-notation-plugin]] — 4 fully independent toggles total
+        // (Leah's explicit call, after an intermediate AND-based design was
+        // rejected as mixing categories incorrectly): gemBodyVisible/
+        // openGemBodyVisible above now apply ONLY to non-chord gems;
+        // chordGemBodyVisible/chordOpenGemBodyVisible below are the
+        // chord-only equivalents, same fretted/open split, no cross-axis
+        // AND between the two pairs. See _gemVisualsOn in drawNote().
+        let chordGemBodyVisible = true;
+        let chordOpenGemBodyVisible = true;
         // 'Show palm-mute markers' / 'Show fret-hand-mute markers' — the X
         // sprite drawn over an individual flying gem for a muted note (n.pm
         // = palm mute, n.mt/n.fhm = fret-hand mute). Independent of the
@@ -4866,6 +4904,273 @@
         // support, see [[highway-classic-core-changes-for-upstream]]) —
         // was fully unconditional here before this.
         let chordNameVisible = true;
+
+        // ── Stutter-debug instrumentation (2026-09-04, local/temporary — NOT part
+        // of the real upstream capability list, see [[highway3d-core-changes-for-upstream]];
+        // tracked instead in [[highway3d-chord-double-render-stutter-suspect]]) ──
+        // Passive, always-on frame-time recorder + a manual "I felt it" marker,
+        // since the actual stutter can't be reproduced on demand. Also a single
+        // A/B flag gating the one still-open double-draw suspect (the arGhostCid
+        // path in the general per-note loop drawing a chord-covered note a
+        // second time). Everything here is read/written via window.__h3dStutter*
+        // so it can be driven from DevTools/CDP without a UI.
+        const _stutterLogKey = 'h3d_stutter_log_v1';
+        const _stutterMaxSamples = 20000; // ~10 min at a steady 144Hz, generous headroom at lower rates
+        let _stutterSamples = [];
+        let _stutterLastT = 0;
+        let _stutterFlushCounter = 0;
+        (function _stutterLoadExisting() {
+            try {
+                const raw = localStorage.getItem(_stutterLogKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) _stutterSamples = parsed.slice(-_stutterMaxSamples);
+                }
+            } catch (_) { /* ignore */ }
+        })();
+        function _stutterFlush() {
+            try {
+                if (_stutterSamples.length > _stutterMaxSamples) {
+                    _stutterSamples = _stutterSamples.slice(-_stutterMaxSamples);
+                }
+                localStorage.setItem(_stutterLogKey, JSON.stringify(_stutterSamples));
+            } catch (_) { /* ignore — e.g. quota; recorder keeps running in-memory regardless */ }
+        }
+        // Chart-time jitter tracking (2026-09-04, added after frame-timing
+        // data showed NOTHING at two real marked "I felt it" moments — both
+        // landed on perfectly normal ~7ms frames. That rules out a frame-rate
+        // hitch and points at something subtler: the visual symptom Leah
+        // described ("gems get a bit wider looking... fuzzy, blurring in
+        // their movement") reads like sub-pixel POSITION jitter, not a
+        // discrete stutter — i.e. getTime()'s returned VALUE wobbling
+        // slightly frame to frame even while wall-clock frame timing stays
+        // smooth. `rate` below is the instantaneous chart-seconds-per-real-
+        // second this frame; it should hold steady near the song's playback
+        // rate (~1.0 at normal speed) — persistent noise around that value,
+        // or `back:true` (chart time actually went backward), would explain
+        // a continuous soft blur where the frame-timing log shows nothing.
+        let _stutterLastChartT = null;
+        // Called once per real draw() call (see the top of draw() below) — this
+        // is actual browser frame timing, not a separate self-driven RAF loop,
+        // so it reflects genuine stutters rather than its own timer jitter.
+        function _stutterRecordFrame(songT, chordActiveCount) {
+            const nowMs = performance.now();
+            const dt = _stutterLastT === 0 ? 0 : (nowMs - _stutterLastT);
+            _stutterLastT = nowMs;
+            if (dt > 0) {
+                const sample = { t: songT, dt: Math.round(dt * 100) / 100, ch: chordActiveCount, ab: !!window.__h3dABDedupeArpGhost };
+                if (_stutterLastChartT !== null) {
+                    const dChart = songT - _stutterLastChartT;
+                    sample.rate = Math.round((dChart / (dt / 1000)) * 1000) / 1000;
+                    sample.back = dChart < 0;
+                }
+                _stutterLastChartT = songT;
+                _stutterSamples.push(sample);
+                if (_stutterSamples.length > _stutterMaxSamples) _stutterSamples.shift();
+            }
+            // Flush every ~120 frames (roughly every 1-2s) rather than every
+            // frame — localStorage.setItem of a growing JSON array every single
+            // frame would itself be a real perf cost, which would be absurd for
+            // a tool whose whole point is measuring perf.
+            _stutterFlushCounter++;
+            if (_stutterFlushCounter >= 120) { _stutterFlushCounter = 0; _stutterFlush(); }
+        }
+        // Manual "I felt it right now" marker — call from DevTools/CDP the
+        // instant a stutter is noticed. Stamps the most recent sample so it's
+        // findable later, and force-flushes immediately (don't wait for the
+        // periodic flush) since this moment matters more than usual.
+        window.__h3dMarkStutter = function (note) {
+            const last = _stutterSamples[_stutterSamples.length - 1];
+            if (last) { last.marked = true; if (note) last.note = String(note); }
+            _stutterFlush();
+            console.log('[h3d-stutter] marked at song time', last ? last.t : '(no samples yet)', note || '');
+            return last || null;
+        };
+        // Read the accumulated log (a copy, so callers can't mutate the live
+        // buffer). Pass {clear:true} to also wipe it after reading.
+        window.__h3dGetStutterLog = function (opts) {
+            const out = _stutterSamples.slice();
+            if (opts && opts.clear) { _stutterSamples = []; _stutterLastT = 0; _stutterFlush(); }
+            return out;
+        };
+        window.__h3dClearStutterLog = function () {
+            _stutterSamples = []; _stutterLastT = 0; _stutterFlush();
+            console.log('[h3d-stutter] log cleared');
+        };
+
+        // ── Long Tasks observer (2026-09-04) ──────────────────────────────
+        // draw()'s own execution time turned out tiny and steady (~1ms) even
+        // during the big dt (frame-to-frame gap) outliers — so whatever's
+        // producing those gaps isn't our own render cost. The browser's Long
+        // Tasks API flags ANY task over 50ms blocking the main thread,
+        // regardless of which script caused it — the standard tool for "what
+        // is actually blocking the main thread" instead of guessing further.
+        // Registered once globally (guarded — this module scope can re-run
+        // per song/instance) since PerformanceObserver has no "already
+        // observing" check of its own.
+        const _longTaskLogKey = 'h3d_longtask_log_v1';
+        const _longTaskMaxSamples = 2000;
+        let _longTasks = [];
+        (function _longTaskLoadExisting() {
+            try {
+                const raw = localStorage.getItem(_longTaskLogKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) _longTasks = parsed.slice(-_longTaskMaxSamples);
+                }
+            } catch (_) { /* ignore */ }
+        })();
+        function _longTaskFlush() {
+            try {
+                if (_longTasks.length > _longTaskMaxSamples) _longTasks = _longTasks.slice(-_longTaskMaxSamples);
+                localStorage.setItem(_longTaskLogKey, JSON.stringify(_longTasks));
+            } catch (_) { /* ignore */ }
+        }
+        if (!window.__h3dLongTaskObserverInstalled) {
+            window.__h3dLongTaskObserverInstalled = true;
+            try {
+                const observer = new PerformanceObserver((list) => {
+                    const hw = window.highway;
+                    for (const entry of list.getEntries()) {
+                        // songT is best-effort — the observer callback fires
+                        // asynchronously (sometimes noticeably after the task
+                        // itself), so this is "roughly when we noticed it,"
+                        // not an exact timestamp of the block. entry.duration
+                        // and entry.startTime (performance.now()-relative)
+                        // are the precise, trustworthy numbers.
+                        const songT = hw && hw.getTime ? hw.getTime() : null;
+                        // attribution[0].name is often 'unknown' for same-
+                        // origin/renderer-process work in Electron, but is
+                        // free when the browser does provide it (e.g. a
+                        // cross-origin iframe or a named container) so it's
+                        // captured anyway rather than discarded.
+                        const attrName = (entry.attribution && entry.attribution[0] && entry.attribution[0].name) || null;
+                        _longTasks.push({
+                            perfStart: Math.round(entry.startTime * 100) / 100,
+                            dur: Math.round(entry.duration * 100) / 100,
+                            songT: songT,
+                            name: entry.name,
+                            attr: attrName,
+                        });
+                        if (_longTasks.length > _longTaskMaxSamples) _longTasks.shift();
+                    }
+                    _longTaskFlush();
+                });
+                observer.observe({ entryTypes: ['longtask'] });
+                console.log('[h3d-stutter] Long Tasks observer installed');
+            } catch (e) {
+                console.warn('[h3d-stutter] Long Tasks API unavailable:', e);
+            }
+        }
+        window.__h3dGetLongTasks = function (opts) {
+            const out = _longTasks.slice();
+            if (opts && opts.clear) { _longTasks = []; _longTaskFlush(); }
+            return out;
+        };
+        window.__h3dClearLongTasks = function () {
+            _longTasks = []; _longTaskFlush();
+            console.log('[h3d-longtask] log cleared');
+        };
+
+        // ── Render-position wobble tracker (2026-09-04) ────────────────────
+        // Neither the frame-timing log nor the Long Tasks observer explained
+        // the "blur" Leah's actually seeing (her marks landed on normal
+        // frames both times) — so instead of inferring position smoothness
+        // from getTime()'s math indirectly, measure the ACTUAL rendered
+        // pixel position directly: window.__h3dGemPositions (the existing
+        // gem-position bridge, see [[highway-notation-plugin]]) already
+        // publishes each visible gem's projected screen sx/sy every frame.
+        // Track ONE note across consecutive frames by its (s,f,t) identity
+        // and log its frame-to-frame horizontal velocity (NDC units of sx
+        // per chart-second) — real wobble/jitter in on-screen motion would
+        // show up directly here, with no time-math inference involved.
+        const _wobbleLogKey = 'h3d_wobble_log_v1';
+        const _wobbleMaxSamples = 20000;
+        let _wobbleSamples = [];
+        let _wobbleTrackedKey = null;
+        let _wobbleLastSx = null;
+        let _wobbleLastSongT = null;
+        let _wobbleFlushCounter = 0;
+        (function _wobbleLoadExisting() {
+            try {
+                const raw = localStorage.getItem(_wobbleLogKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) _wobbleSamples = parsed.slice(-_wobbleMaxSamples);
+                }
+            } catch (_) { /* ignore */ }
+        })();
+        function _wobbleFlush() {
+            try {
+                if (_wobbleSamples.length > _wobbleMaxSamples) _wobbleSamples = _wobbleSamples.slice(-_wobbleMaxSamples);
+                localStorage.setItem(_wobbleLogKey, JSON.stringify(_wobbleSamples));
+            } catch (_) { /* ignore */ }
+        }
+        function _wobbleRecordFrame(songT) {
+            const positions = window.__h3dGemPositions;
+            if (!Array.isArray(positions) || !positions.length) { _wobbleTrackedKey = null; return; }
+            // Last-write-wins for duplicate pushes per note (a known
+            // instrumentation quirk of this bridge, unrelated to what we're
+            // measuring here — see the double-render-suspect memory's later
+            // addendum) — doesn't matter which copy we keep, sx/sy should
+            // match between them for the same real gem.
+            const byKey = new Map();
+            for (const g of positions) {
+                if (!g) continue;
+                byKey.set(g.s + ':' + g.f + ':' + g.t.toFixed(3), g);
+            }
+            // Pick a new note to track whenever we don't have one, or the
+            // one we had has scrolled off/finished — deterministic choice
+            // (sorted key order) rather than random, so which note gets
+            // tracked is at least reproducible run to run.
+            if (_wobbleTrackedKey === null || !byKey.has(_wobbleTrackedKey)) {
+                const keys = Array.from(byKey.keys()).sort();
+                _wobbleTrackedKey = keys.length ? keys[0] : null;
+                _wobbleLastSx = null;
+                _wobbleLastSongT = null;
+            }
+            if (_wobbleTrackedKey === null) return;
+            const g = byKey.get(_wobbleTrackedKey);
+            if (_wobbleLastSx !== null && _wobbleLastSongT !== null) {
+                const dSongT = songT - _wobbleLastSongT;
+                if (dSongT > 0) {
+                    const dSx = g.sx - _wobbleLastSx;
+                    _wobbleSamples.push({
+                        t: songT,
+                        sx: Math.round(g.sx * 10000) / 10000,
+                        v: Math.round((dSx / dSongT) * 1000) / 1000,
+                        key: _wobbleTrackedKey,
+                    });
+                    if (_wobbleSamples.length > _wobbleMaxSamples) _wobbleSamples.shift();
+                }
+            }
+            _wobbleLastSx = g.sx;
+            _wobbleLastSongT = songT;
+            _wobbleFlushCounter++;
+            if (_wobbleFlushCounter >= 120) { _wobbleFlushCounter = 0; _wobbleFlush(); }
+        }
+        window.__h3dGetWobbleLog = function (opts) {
+            const out = _wobbleSamples.slice();
+            if (opts && opts.clear) { _wobbleSamples = []; _wobbleTrackedKey = null; _wobbleFlush(); }
+            return out;
+        };
+        window.__h3dClearWobbleLog = function () {
+            _wobbleSamples = []; _wobbleTrackedKey = null; _wobbleFlush();
+            console.log('[h3d-wobble] log cleared');
+        };
+        // A/B toggle for the one still-open double-draw suspect: the general
+        // per-note loop's arGhostCid (arpeggio-ghost inference) path draws a
+        // chord-member note with a full, unsuppressed render (see the drawNote()
+        // call in the general loop below) regardless of whether the chord loop
+        // is ALSO about to draw that same note's chord shape — unlike the
+        // synthetic-arpeggio case, which deferChordGems already handles. This
+        // flag, when true, suppresses that general-loop draw's body (skipBody)
+        // for arGhostCid-inferred notes, same shape as the existing _isSlideTgt
+        // suppression already does. OFF by default — this is the "B" variant,
+        // not a fix being shipped; flip it on/off across separate real play
+        // sessions and compare window.__h3dGetStutterLog() output between them.
+        window.__h3dABDedupeArpGhost = false;
+
         // Camera-X smoothing dial (issue #34). 0 = twitchy (track every
         // upcoming fret), 1 = calm (ignore small intra-cluster shifts).
         // Cached here and refreshed via the bg listener to avoid a
@@ -4941,6 +5246,9 @@
         let toneHudSize            = BG_DEFAULTS.toneHudSize;
         let nutHeadstockVisible    = BG_DEFAULTS.nutHeadstockVisible;
         let tuningLabelsVisible    = BG_DEFAULTS.tuningLabelsVisible;
+        let stringLinesVisible     = BG_DEFAULTS.stringLinesVisible;
+        let inlayDotsVisible       = BG_DEFAULTS.inlayDotsVisible;
+        let fretWiresVisible       = BG_DEFAULTS.fretWiresVisible;
         let nutColor               = BG_DEFAULTS.nutColor;
         let headstockColor         = BG_DEFAULTS.headstockColor;
         let projectionVisible      = BG_DEFAULTS.projectionVisible;   // board "note preview" ghost on the fretboard
@@ -5186,6 +5494,10 @@
         let _gemProbe = null;
         let _gemProbe2 = null; // second point (gem centre + one K-unit) for scale derivation
         let _gemBridgeFrame = null;
+        // Chord-frame bridge (2026-09-05): same pattern, but for the visible
+        // strum-bar frame's screen quad rather than a single gem point — see
+        // window.__h3dChordFramePositions below.
+        let _chordFrameBridgeFrame = null;
         let pHaloBar = null, gHaloBar = null; // gradient halo bar geometry — replaces per-shell pChordAccentHalo
         let gArpBracket = null; // shared 1×1×1 box geometry for pArpBracket; built once, disposed in teardown
         let pSusRibbon = null, pSusRibbonOl = null;
@@ -5197,6 +5509,7 @@
 
         // Dynamic glowing string meshes (BoxGeometry, one per string)
         let stringLines = [];
+        let _fretInlayDots = [];
         // Static thin-line glow layer behind each string (one Line per
         // string). Retained so _applyVibrancy() can mutate opacity in
         // place — without this the layer stays at its built-in opacity
@@ -5206,6 +5519,7 @@
         // Updated each frame to gold when inside the active anchor range,
         // gray otherwise. Reset to [] on every buildBoard() rebuild.
         let fretWireMats = [];
+        let _fretWireMeshes = [];
         // Shared bowed TubeGeometry for all fret wires (centered at x=0;
         // each fret mesh only differs by position). Disposed on rebuild +
         // teardown. See FRET_BOW_DZ constants.
@@ -5496,6 +5810,19 @@
         let _clkPerf = NaN;     // performance.now() when that sample arrived
         let _clkRate = 1;       // observed chart-seconds per real-second
         let _frameNow = 0;      // smoothed time for THIS frame (update → camUpdate)
+        // 2026-09-04: tried display-error smoothing + rate EMA in this
+        // function TWICE tonight — a direct mirror of the static/highway.js
+        // getTime()/setTime() fix, then a gap-gated version meant to only
+        // smooth when frames genuinely outran real samples. BOTH made things
+        // visibly worse live ("jumping in segments", then "the entire highway
+        // is jittery") rather than better. Reverted back to the plain
+        // original below. See [[highway3d-chord-double-render-stutter-suspect]]
+        // for the full history — do not reattempt this approach without a
+        // fundamentally different design, not just a tighter gate; something
+        // about re-implementing this smoothing inside smoothNow() (as opposed
+        // to core static/highway.js's getTime(), where the same idea DID
+        // help) is structurally different enough that it needs to be
+        // understood, not just re-tuned, before trying again.
 
         // Low-overdraw sustain rendering (DEFAULT since perf profiling on
         // dense palm-mute / fret-hand-mute passages). Those sections are GPU
@@ -8519,6 +8846,22 @@
                     if (_tuningLabelSprites.length) _disposeOpenStringPitchSprites();
                     return;
                 }
+                if (changedKey === 'stringLinesVisible') {
+                    _bgLoadSettings();
+                    for (const line of stringLines) line.visible = stringLinesVisible;
+                    for (const glow of stringLineGlows) glow.visible = stringLinesVisible;
+                    return;
+                }
+                if (changedKey === 'inlayDotsVisible') {
+                    _bgLoadSettings();
+                    for (const d of _fretInlayDots) d.visible = inlayDotsVisible;
+                    return;
+                }
+                if (changedKey === 'fretWiresVisible') {
+                    _bgLoadSettings();
+                    for (const fw of _fretWireMeshes) if (fw) fw.visible = fretWiresVisible;
+                    return;
+                }
                 if (changedKey === 'nutColor' || changedKey === 'headstockColor') {
                     _bgLoadSettings();
                     if (fretG) buildBoard();
@@ -8531,6 +8874,8 @@
                     changedKey === 'dynamicFretRowVisible' ||
                     changedKey === 'gemBodyVisible' ||
                     changedKey === 'openGemBodyVisible' ||
+                    changedKey === 'chordGemBodyVisible' ||
+                    changedKey === 'chordOpenGemBodyVisible' ||
                     changedKey === 'palmMuteMarkerVisible' ||
                     changedKey === 'fretHandMuteMarkerVisible' ||
                     changedKey === 'chordNameVisible' ||
@@ -8840,6 +9185,8 @@
             dynamicFretRowVisible = _bgReadSetting(panelKey, 'dynamicFretRowVisible');
             gemBodyVisible = _bgReadSetting(panelKey, 'gemBodyVisible');
             openGemBodyVisible = _bgReadSetting(panelKey, 'openGemBodyVisible');
+            chordGemBodyVisible = _bgReadSetting(panelKey, 'chordGemBodyVisible');
+            chordOpenGemBodyVisible = _bgReadSetting(panelKey, 'chordOpenGemBodyVisible');
             palmMuteMarkerVisible = _bgReadSetting(panelKey, 'palmMuteMarkerVisible');
             fretHandMuteMarkerVisible = _bgReadSetting(panelKey, 'fretHandMuteMarkerVisible');
             chordNameVisible = _bgReadSetting(panelKey, 'chordNameVisible');
@@ -8884,6 +9231,9 @@
             toneHudSize            = _bgReadSetting(panelKey, 'toneHudSize');
             nutHeadstockVisible    = _bgReadSetting(panelKey, 'nutHeadstockVisible');
             tuningLabelsVisible    = _bgReadSetting(panelKey, 'tuningLabelsVisible');
+            stringLinesVisible     = _bgReadSetting(panelKey, 'stringLinesVisible');
+            inlayDotsVisible       = _bgReadSetting(panelKey, 'inlayDotsVisible');
+            fretWiresVisible       = _bgReadSetting(panelKey, 'fretWiresVisible');
             nutColor               = _bgReadSetting(panelKey, 'nutColor');
             headstockColor         = _bgReadSetting(panelKey, 'headstockColor');
             projectionVisible      = _bgReadSetting(panelKey, 'projectionVisible');
@@ -9414,6 +9764,7 @@
             // tracking array. The shared fretTubeGeo was skipped by that
             // traverse, so dispose it exactly once here.
             fretWireMats = [];
+            _fretWireMeshes = [];
             fretTubeGeo?.dispose?.();
             fretTubeGeo = null;
 
@@ -9459,6 +9810,7 @@
                 const g = new T.BufferGeometry().setFromPoints(pts);
                 const line = new T.Line(g, new T.LineBasicMaterial({ color: activePalette[s], transparent: true, opacity: lineGlowOp }));
                 line.renderOrder = 7; // above sus rails (4/5), below chord fill (10)
+                line.visible = stringLinesVisible;
                 fretG.add(line);
                 stringLineGlows.push(line);
             }
@@ -9476,6 +9828,7 @@
                 const mesh = new T.Mesh(g, mat);
                 mesh.renderOrder = renderOrderForLayerAtZ(0, 'BOARD_STRING');
                 mesh.position.set(boardStringStartX + strSpan * 0.5, sY(s), 0);
+                mesh.visible = stringLinesVisible;
                 fretG.add(mesh);
                 stringLines.push(mesh);
             }
@@ -9654,8 +10007,10 @@
                 const fw = new T.Mesh(fretTubeGeo, mat);
                 fw.position.set(x, wireMidY, 0);
                 fw.renderOrder = renderOrderForLayerAtZ(0, 'BOARD_FRET_WIRE');
+                fw.visible = fretWiresVisible;
                 fretG.add(fw);
                 fretWireMats[f] = mat;
+                _fretWireMeshes[f] = fw;
             }
 
             // Fret dots — flat circles (CircleGeometry) lying in the XY plane and
@@ -9681,7 +10036,9 @@
                 // inlay; still well below strings / wires / notes,
                 // so those keep drawing on top of the inlay.
                 d.renderOrder = 3;
+                d.visible = inlayDotsVisible;
                 fretG.add(d);
+                _fretInlayDots.push(d);
             };
             for (const f of DOTS) {
                 const cx = xFretMid(f);
@@ -10984,6 +11341,7 @@
             // window.__h3dGemPositions at the end of update() — see that write for
             // why this stays a fresh array per frame rather than being cleared in place.
             _gemBridgeFrame = [];
+            _chordFrameBridgeFrame = [];
 
             pNote.reset(); pNoteEdge.reset(); pSus.reset(); pSusOutline.reset(); pSusRibbon.reset(); pSusRibbonOl.reset(); pTapChevron.reset(); pAccentHalo.reset(); pLbl.reset();
             pBeat.reset(); pSec.reset();
@@ -11965,12 +12323,20 @@
                     const _arpBoundsForNote = arGhostCid != null
                         ? arpHsBoundsForNote(n, bundle.handShapes, arpGhostHsInfer)
                         : null;
+                    // Stutter-debug A/B (window.__h3dABDedupeArpGhost, see the
+                    // stutter-debug block above): when on, suppress this loop's
+                    // gem-body render for an arGhostCid-inferred note — the one
+                    // still-open double-draw suspect from
+                    // [[highway3d-chord-double-render-stutter-suspect]]. OFF by
+                    // default (unchanged behavior); this line is the ONLY
+                    // behavioral difference the flag makes.
+                    const _abSuppressArpGhostBody = arGhostCid != null && window.__h3dABDedupeArpGhost;
                     drawNote(
                         n,
                         now,
                         singleOpenX,
                         skipLabel,
-                        _isSlideTgt,
+                        _isSlideTgt || _abSuppressArpGhostBody,
                         GHOST_HOLD_AFTER_ONSET,
                         singleOpenLaneW,
                         arGhostCid != null,
@@ -12477,6 +12843,17 @@
                             }
                         }
                     }
+                    // isRealChordMember (for chordGemBodyVisible/chordOpenGemBodyVisible,
+                    // see entry 11): a chord instance with a blank/whitespace-only
+                    // template name (a single space, " ", confirmed in the wild —
+                    // see [[highway-notation-plugin]]) reads as "not really a chord"
+                    // to Leah the same way it does for note-letter display —
+                    // "those with 3 notes in them that do not have a chord name"
+                    // should stay under the non-chord toggles, not the chord ones.
+                    // chordTemplateLabel() itself only checks .length > 0, not
+                    // trimmed content, so a lone space passes it — trim here too.
+                    const _isNamedChordForGemVisibility =
+                        chordTemplateLabel(bundle.chordTemplates?.[ch.id]).trim().length > 0;
                     if (!deferChordGems || _deferFallback || suppressSynthChord) {
                         for (const cn of chordNotes) {
                             // Suppress non-first gems while an authored arpeggio frame
@@ -12529,6 +12906,7 @@
                                 null,
                                 _ghostPrevBuf.get(Math.round(ch.t * 1e4) * 10 + cn.s) ?? -Infinity,
                                 chordHighwayLavenderArpVisual || suppressSynthChord || chordWireHighDensity(ch),
+                                _isNamedChordForGemVisibility, // isRealChordMember — true only when this chord instance has an actual (trimmed non-blank) name; an unnamed chord-tagged shape (double-stop/triad with no name) falls to the non-chord toggles instead
                             );
                             lastFretForString[cn.s] = cn.f;
                             // gate by THIS note's own sustain against the
@@ -12644,6 +13022,33 @@
                         const cY = (yBot + yTop) * 0.5;
                         const fade = Math.max(0, 1 - chDt / AHEAD);
                         const chordAccent = chordNotes.some(cn => cn.ac);
+
+                        // Chord-frame bridge: publish this frame's real screen quad
+                        // (all 4 corners, since perspective can skew a rectangle —
+                        // unlike a single gem point) for a plugin to anchor a chord
+                        // name to the actual on-screen strum-bar frame instead of
+                        // approximating it from voiced-note positions. Same
+                        // read-only, purely-additive pattern as __h3dGemPositions/
+                        // __h3dFretGridPositions. Covers this branch only (the
+                        // "chDt > -chordTailHoldS && chDt < AHEAD" frame actually
+                        // being drawn) — repeat and arpeggio frames both flow
+                        // through this same cx/width/yBot/yTop block above, just
+                        // with different height/isRepeat values, so both are
+                        // already covered without extra branching here.
+                        if (_chordFrameBridgeFrame) {
+                            _gemProbe.set(cx - width / 2, yTop, z); _gemProbe.project(cam);
+                            const tlx = _gemProbe.x, tly = _gemProbe.y;
+                            _gemProbe.set(cx + width / 2, yTop, z); _gemProbe.project(cam);
+                            const trx = _gemProbe.x, trY = _gemProbe.y;
+                            _gemProbe.set(cx - width / 2, yBot, z); _gemProbe.project(cam);
+                            const blx = _gemProbe.x, bly = _gemProbe.y;
+                            _gemProbe.set(cx + width / 2, yBot, z); _gemProbe.project(cam);
+                            const brx = _gemProbe.x, brY = _gemProbe.y;
+                            _chordFrameBridgeFrame.push({
+                                id: ch.id, t: ch.t,
+                                tlx, tly, trx, trY, blx, bly, brx, brY,
+                            });
+                        }
 
                         // Rim thickness from full vertical span — repeat halves inner height only,
                         // not bar thickness vs first chord — see CHORD_FRAME_RIM_* tuning.
@@ -14113,6 +14518,51 @@
             // read by this file itself, so a missing/absent consumer is a no-op.
             window.__h3dGemPositions = _gemBridgeFrame;
 
+            // Chord-frame bridge — same read-only, additive pattern as the gem
+            // bridge above; array of {id, t, tlx, tly, trx, trY, blx, bly, brx,
+            // brY} (NDC screen coords for all 4 corners of each visible chord's
+            // strum-bar frame this frame). Empty when no chord frame is visible.
+            window.__h3dChordFramePositions = _chordFrameBridgeFrame;
+
+            // Fret-grid bridge — same read-only pattern as the gem bridge above,
+            // but for the STATIC board grid (every string x every fret 0..NFRETS)
+            // rather than live chart notes. A consumer plugin wanting to draw an
+            // always-on overlay (e.g. a full-neck scale display) needs to know
+            // where each fret physically sits on screen every frame (the camera
+            // moves), but that math is otherwise private to this file. Reuses
+            // xFret(f)/sY(s) — the SAME functions that place the real fret wires
+            // and string lines — so grid points land exactly on the real board,
+            // not a separately-maintained approximation of it.
+            {
+                const fretGrid = [];
+                for (let s = 0; s < nStr; s++) {
+                    const y = sY(s);
+                    for (let f = 0; f <= NFRETS; f++) {
+                        // xFretMid, not xFret: a fretted note's actual playing
+                        // position is the MIDDLE of the fret space (between the
+                        // f-1 and f wires), not the f wire boundary itself —
+                        // same function real gems use (xFretMid(n.f) at update()
+                        // ~line 14749). xFret(f) is only correct for the wires
+                        // themselves. f=0 (open string) is NOT handled by
+                        // xFretMid the way this comment used to assume: real
+                        // open-string gems don't use xFretMid(0) at all (they
+                        // render at the moving `openX` play-line position —
+                        // see update()'s `n.f === 0 ? openX : xFretMid(n.f)`
+                        // branch), and fretMid(0) itself resolves to a fixed
+                        // "-2*K" constant that isn't a real board position —
+                        // it landed the open-string grid dot far off the neck
+                        // (bug found 2026-09-05). For a STATIC full-neck grid
+                        // point, the correct open-string position is the nut
+                        // itself: xFret(0), the same wire position the board
+                        // mesh actually draws at fret 0.
+                        _gemProbe.set(f === 0 ? xFret(0) : xFretMid(f), y, 0);
+                        _gemProbe.project(cam);
+                        fretGrid.push({ s, f, sx: _gemProbe.x, sy: _gemProbe.y });
+                    }
+                }
+                window.__h3dFretGridPositions = fretGrid;
+            }
+
             pbEnd(5);
             pbEnd(0);
             pbReportTick();
@@ -14329,7 +14779,7 @@
         // skipLabel: don't draw per-note connector label (repeated fret)
         // skipBody:  don't draw the 3D note mesh (repeat chord — still shows projection)
         // showDropLine: draw a white vertical drop line from note to below board (arpeggio / synth chord notes)
-        function drawNote(n, now, openX, skipLabel, skipBody, linger = 0.10, openChordBoxWidth, fromChord = false, chordId, susTrailMatchArpFrame = false, arpBounds = null, prevOnsetT = -Infinity, showDropLine = false) {
+        function drawNote(n, now, openX, skipLabel, skipBody, linger = 0.10, openChordBoxWidth, fromChord = false, chordId, susTrailMatchArpFrame = false, arpBounds = null, prevOnsetT = -Infinity, showDropLine = false, isRealChordMember = false) {
             const s = n.s;
             // Belt + suspenders: callers already gate via validString(),
             // but drawNote is also entered through { ...cn } chord-note
@@ -14748,7 +15198,24 @@
                 // scoring/consumers (e.g. display_note_letter's per-string-color
                 // note labels) keep working with gems hidden. Split by n.f===0
                 // (open/strum) vs fretted so either can be hidden independently.
-                const _gemVisualsOn = n.f === 0 ? openGemBodyVisible : gemBodyVisible;
+                // 4 fully independent gem-body toggles, added for
+                // [[highway-notation-plugin]] 2026-09-05 — no cross-axis AND:
+                // a chord gem's visibility comes ENTIRELY from
+                // chordGemBodyVisible/chordOpenGemBodyVisible; a non-chord
+                // gem's ENTIRELY from gemBodyVisible/openGemBodyVisible. Two
+                // earlier designs were tried and rejected live: (1) fromChord
+                // for the chord/non-chord split — wrong, fromChord is ALSO
+                // true for arpeggio-ghost-inferred notes in the single-note
+                // loop (a rendering heuristic, not real chord membership) —
+                // fixed via the dedicated isRealChordMember parameter above;
+                // (2) ANDing the old fret/open toggles with the new chord
+                // toggles — rejected per Leah's explicit ask ("chord changes
+                // are governed by their new 2 options only now... the old
+                // toggles only affect non chords now... I still want 4
+                // toggles. So keep them separated").
+                const _gemVisualsOn = isRealChordMember
+                    ? (n.f === 0 ? chordOpenGemBodyVisible : chordGemBodyVisible)
+                    : (n.f === 0 ? openGemBodyVisible : gemBodyVisible);
 
                 // Accent: soft neon outer glow (reference: diffused halo fading out).
                 // Three additive shells drawn behind outline/core; colour = string hue.
@@ -16183,7 +16650,7 @@
             if (ren) { ren.dispose(); ren = null; }
             scene = cam = noteG = beatG = lblG = fretG = tuningLblG = null;
             ambLight = dirLight = null;
-            mStr = []; mGlow = []; mSus = []; mStrHitOutline = []; mAccentOutline = []; mAccentCore = []; mAccentHaloNear = []; mAccentHaloMid = []; mAccentHaloFar = []; _accentShellsByString = []; mWhiteOutline = mSusOutline = null; mMissOutline = null; mHitSusOutline = null; stringLines = []; stringLineGlows = []; _boardPlaneMat = null; fretWireMats = []; fretTubeGeo?.dispose?.(); fretTubeGeo = null;
+            mStr = []; mGlow = []; mSus = []; mStrHitOutline = []; mAccentOutline = []; mAccentCore = []; mAccentHaloNear = []; mAccentHaloMid = []; mAccentHaloFar = []; _accentShellsByString = []; mWhiteOutline = mSusOutline = null; mMissOutline = null; mHitSusOutline = null; stringLines = []; stringLineGlows = []; _boardPlaneMat = null; fretWireMats = []; _fretWireMeshes = []; fretTubeGeo?.dispose?.(); fretTubeGeo = null;
             for (const m of _inlayMats) m?.dispose?.(); _inlayMats = []; _inlayLabels = [];
             // mTapChevron: dispose explicitly — if no tap marker ever
             // spawned a pooled mesh, the scene.traverse() pass above never
@@ -16216,7 +16683,7 @@
             mBeatM = mBeatQ = null;
             pNote = pNoteEdge = pSus = pSusOutline = pSusRibbon = pSusRibbonOl = pLbl = pBeat = pSec = null;
             pFretLbl = pLane = pLaneDivider = pGhostFretLbl = pChordBox = pChordFrameFill = pChordLbl = pBarreLine = pArpBracket = pNoteFretLabel = pConnectorLine = pDropLine = pTapChevron = pAccentHalo = pHaloBar = pPMXFill = pFHXFill = pMuteXLines = pFHXLines = pTeachMarkLbl = null;
-            _gemProbe = null; _gemProbe2 = null; _gemBridgeFrame = null;
+            _gemProbe = null; _gemProbe2 = null; _gemBridgeFrame = null; _chordFrameBridgeFrame = null;
             if (gPMXFill) { gPMXFill.dispose(); gPMXFill = null; }
             if (gFHXFill) { gFHXFill.dispose(); gFHXFill = null; }
             if (gPMXLines) { gPMXLines.dispose(); gPMXLines = null; }
@@ -16408,7 +16875,50 @@
                 try { return _venueEffectiveMotionMode() !== 'off'; } catch (_) { return false; }
             },
 
+            // Stutter-debug wrapper (2026-09-04): the real draw work moved to
+            // _drawImpl below — this thin wrapper measures the frame recorder
+            // (dt/rate, as before) AND, new, how long _drawImpl itself takes
+            // to run. Irregular per-frame timing could mean either "frames
+            // aren't being DELIVERED on a steady cadence" (scheduling/vsync)
+            // or "the script itself is taking a variable amount of time to
+            // run" (main-thread cost) — this separates those two explanations
+            // instead of only ever seeing the combined gap between calls.
             draw(bundle) {
+                const _t0 = performance.now();
+                let _songT = 0;
+                try {
+                    const hw = window.highway;
+                    _songT = hw && hw.getTime ? hw.getTime() : 0;
+                    let chordActiveCount = 0;
+                    if (hw && hw.getChords) {
+                        const chs = hw.getChords();
+                        if (Array.isArray(chs)) {
+                            for (let i = 0; i < chs.length; i++) {
+                                const c = chs[i];
+                                if (c && Math.abs(c.t - _songT) < 2) chordActiveCount++;
+                            }
+                        }
+                    }
+                    _stutterRecordFrame(_songT, chordActiveCount);
+                } catch (_) { /* never let debug instrumentation break real rendering */ }
+
+                const _ret = this._drawImpl(bundle);
+
+                try {
+                    const execMs = performance.now() - _t0;
+                    const last = _stutterSamples[_stutterSamples.length - 1];
+                    if (last) last.dur = Math.round(execMs * 100) / 100;
+                } catch (_) { /* ignore */ }
+
+                // Wobble tracker reads window.__h3dGemPositions, which
+                // _drawImpl just refreshed this frame — must run AFTER the
+                // call above, not before.
+                try { _wobbleRecordFrame(_songT); } catch (_) { /* ignore */ }
+
+                return _ret;
+            },
+
+            _drawImpl(bundle) {
                 if (!_isReady) return;
                 if (_ctxLost) return;   // GPU context lost (alt-tab / reset) — skip until restored
                 if (!_chartPrewarmed) {

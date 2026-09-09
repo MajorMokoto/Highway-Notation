@@ -2,15 +2,9 @@
 
 Draws the note letter (A–G♯) on every fret, on both the 3D Highway and the classic 2D Highway. Also highlights the song's key/root note (auto set if in the song's data, or manually set in the pane settings), shows a full-fretboard scale overlay (3D), and allows manually positioning chord names over the chord/fretboard.
 
-**[Download Windows installer](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Install-HighwayNotation.exe)** — or **[download the zip](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)** for manual install / other platforms
+**[Download the zip](https://github.com/MajorMokoto/Highway-Notation/releases/latest/download/Highway-Notation.zip)**
 
 ## Installation
-
-### Windows — automatic
-
-Run **Install-HighwayNotation.exe**. It finds your FeedBack install automatically, asks to confirm, and copies everything into place. Requires admin rights (it'll prompt).
-
-### Manual (all platforms)
 
 This isn't a single drop-in plugin — the download has three folders, and they don't all go to the same place. Please place each folder in the locations listed below. Overwrite existing files.
 

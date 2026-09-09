@@ -36,6 +36,15 @@ Paths above are for Windows. On other platforms, the `resources\slopsmith\` fold
 <td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret markers hidden</sub></td>
 </tr></table>
 
+## Scale Overlay (3D)
+
+Shows the current key's scale across the whole fretboard, not just the notes in the chart — either as dots or as the actual note letters.
+
+<table><tr>
+<td width="50%"><img src="Screenshots/3D Highway Scales Dots.PNG" width="100%"><br><sub>Dots</sub></td>
+<td width="50%"><img src="Screenshots/3D Highway Scales Notes.PNG" width="100%"><br><sub>Note letters</sub></td>
+</tr></table>
+
 ## 2D Highway
 
 <table><tr>

@@ -21,13 +21,13 @@ Paths above are for Windows. On other platforms, the `resources\slopsmith\` fold
 
 - **Windows**: `C:\Program Files\feedback\current\resources\slopsmith\plugins\`
 - **macOS**: `/Applications/FeedBack.app/Contents/Resources/slopsmith/`
-- **Linux**: varies by install method — an AppImage needs to be extracted (`--appimage-extract`) to get a real folder to drop files into; a `.deb` install is likely under `/opt/Feedback/resources/slopsmith/`
+- **Linux**: varies by install method — an AppImage needs to be extracted (`--appimage-extract`) to get a real folder to drop files into; a `.deb` install is likely under `/home/user/.config/feedback-desktop/plugins/`
 
 ## 3D Highway
 
 <table><tr>
 <td width="50%"><img src="Screenshots/3D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret markers hidden</sub></td>
+<td width="50%"><img src="Screenshots/3D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret numbers hidden</sub></td>
 </tr></table>
 
 ## Scale Overlay (3D)
@@ -51,7 +51,7 @@ The chord name is centered over the actual strum shape as it approaches and stri
 
 <table><tr>
 <td width="50%"><img src="Screenshots/2D Highway Defaults.PNG" width="100%"><br><sub>Default</sub></td>
-<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret markers hidden</sub></td>
+<td width="50%"><img src="Screenshots/2D Highway Hardmode.PNG" width="100%"><br><sub>Hardmode — fret numbers hidden</sub></td>
 </tr></table>
 
 ![Letter position can be dragged off the fret number](Screenshots/2D%20Highway%20Note%20Letter%20Offset.PNG)

@@ -61,7 +61,7 @@
     // still show per showOpen/showFretted). Standalone (non-chord) notes are
     // never affected by chordMode.
     const DEFAULT_SETTINGS = {
-        showOpen: true, showFretted: true, chordMode: 'all', sizeK: 5.0, chordSizeK: 5.0, color: '#ffffff',
+        showOpen: true, showFretted: true, chordMode: 'all', sizeK: 5.0, chordSizeK: 6.0, color: '#ffffff',
         bgEnabled: false, bgColor: '#000000', bgOpacity: 70,
         matchGemColor: false, hideFretMarkers: false, hideOpenMarkers: false,
         hideChordGems: false, hideChordOpenGems: false,
@@ -87,7 +87,7 @@
         // dragging every single note letter along with it). Two separate
         // drag pads in the pane, side by side, rather than a single shared
         // pad with a mode selector — simpler to build and faster to read.
-        chordOffsetX: 0, chordOffsetY: 0,
+        chordOffsetX: -0.7838541666666667, chordOffsetY: -0.8355555555555556,
         // Multiplier applied to the SAME chordOffsetX/Y dial once a chord
         // has actually struck the hit line, instead of the much larger
         // range used while it's still flying/approaching — added 2026-09-05
@@ -137,7 +137,7 @@
         // picker — deliberately reuses settings.color, per Leah's call
         // 2026-09-06 ("we don't need a new color picker for the scale
         // colors. It can just use the letter color").
-        scaleDisplayMode: 'dots', scaleUseFretColor: false,
+        scaleDisplayMode: 'notes', scaleUseFretColor: true,
         // How far back (in units of that string's own fret-0-to-fret-1
         // spacing) to pull the open-string (fret 0) marker off the nut and
         // toward the headstock, roughly lining it up with where the core

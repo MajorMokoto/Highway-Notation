@@ -45,6 +45,14 @@ Shows the current key's scale across the whole fretboard, not just the notes in 
 <td width="50%"><img src="Screenshots/3D Highway Scales Notes.PNG" width="100%"><br><sub>Note letters</sub></td>
 </tr></table>
 
+The song's key is auto-detected when the song has key data. When it doesn't — or the auto-detected key isn't the one you want — you can set the key and scale manually per song from the settings pane, and separately for Virtuoso, since it doesn't share the same song data. The root note also gets a ring around its letter wherever it appears, so the key's home note stands out at a glance.
+
+## Chord Names (3D)
+
+The chord name is centered over the actual strum shape as it approaches and strikes, instead of anchoring to a single string.
+
+![Chord name centered over the strum shape](Screenshots/3D%20Highway%20Chord%20Names.PNG)
+
 ## 2D Highway
 
 <table><tr>

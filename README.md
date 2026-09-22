@@ -12,10 +12,10 @@ This isn't a single drop-in plugin — the download has three folders, and they 
    `highway_notation` folder install location: `feedback\current\resources\slopsmith\plugins\`
 
 2. **Updated 3D Highway** (Required for notes to display on 3D Highway)
-   `highway_3d\screen.js` and `highway_3d\settings.html` install location: `feedback\current\resources\slopsmith\plugins\highway_3d\` (overwrite just these two files — the rest of your existing highway_3d folder stays as-is)
+   `highway_3d\screen.js` and `highway_3d\settings.html` install location: `feedback\current\resources\slopsmith\plugins\highway_3d\` 
 
 3. **Updated 2D Highway** (Required for notes to display on 2D Highway)
-   `static` folder install location: `feedback\current\resources\slopsmith\` (adds/overwrites `highway.js`, `js\highway-draw.js`, and `js\highway-state-primitives.js`)
+   `static` folder install location: `feedback\current\resources\slopsmith\` 
 
 Paths above are for Windows. On other platforms, the `resources\slopsmith\` folder lives in a different place:
 

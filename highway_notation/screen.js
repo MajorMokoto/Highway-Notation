@@ -1,3 +1,6 @@
+// Copyright (c) 2026 MajorMokoto. Licensed under the GNU Affero General
+// Public License v3.0 only (AGPL-3.0-only); see the LICENSE file.
+//
 // highway_notation — shows the chromatic note letter on each gem, on
 // EITHER highway renderer (classic 2D canvas or the 3D Highway plugin).
 // One file, two independent draw paths — see "Renderer split" below — so a
@@ -109,6 +112,13 @@
         // match core's own look; a checkbox lets it be turned back off for a
         // flat, always-fully-opaque name instead.
         fadeChordName: true,
+        // How every note NAME this plugin displays is written: 'letters'
+        // (C D E F G A B) or 'french' (Do Ré Mi Fa Sol La Si, fixed-do, Do
+        // is always C). One switch for everything — gem letters, chord
+        // names, scale-overlay letters, the key dropdown and the key status
+        // rows — never a mix. Display only: all matching/lookup logic stays
+        // on the English pitch-class names internally.
+        noteNaming: 'letters',
         // Rings the letter of any note matching the song's current key/root
         // (window.highway.getKeyTonicAt), when the active song has a keys
         // track at all — silently does nothing on songs without one.
@@ -211,6 +221,7 @@
             const sds = localStorage.getItem(LS_PREFIX + 'scaleDotSizeMul');
             const sdo = localStorage.getItem(LS_PREFIX + 'scaleDotOpacity');
             const sdm = localStorage.getItem(LS_PREFIX + 'scaleDisplayMode');
+            const nn = localStorage.getItem(LS_PREFIX + 'noteNaming');
             const sufc = localStorage.getItem(LS_PREFIX + 'scaleUseFretColor');
             const sosk = localStorage.getItem(LS_PREFIX + 'scaleOpenStringOffsetK');
             const aopv = localStorage.getItem(LS_PREFIX + 'autoOpenPaneInVirtuoso');
@@ -248,6 +259,7 @@
                 scaleDotSizeMul: sds === null ? DEFAULT_SETTINGS.scaleDotSizeMul : (Number.isFinite(parseFloat(sds)) ? Math.max(0.2, Math.min(3, parseFloat(sds))) : DEFAULT_SETTINGS.scaleDotSizeMul),
                 scaleDotOpacity: sdo === null ? DEFAULT_SETTINGS.scaleDotOpacity : (Number.isFinite(parseFloat(sdo)) ? Math.max(0, Math.min(100, parseFloat(sdo))) : DEFAULT_SETTINGS.scaleDotOpacity),
                 scaleDisplayMode: (sdm === 'dots' || sdm === 'notes') ? sdm : DEFAULT_SETTINGS.scaleDisplayMode,
+                noteNaming: (nn === 'letters' || nn === 'french') ? nn : DEFAULT_SETTINGS.noteNaming,
                 scaleUseFretColor: sufc === null ? DEFAULT_SETTINGS.scaleUseFretColor : sufc === '1',
                 scaleOpenStringOffsetK: sosk === null ? DEFAULT_SETTINGS.scaleOpenStringOffsetK : (Number.isFinite(parseFloat(sosk)) ? Math.max(0, Math.min(3, parseFloat(sosk))) : DEFAULT_SETTINGS.scaleOpenStringOffsetK),
                 autoOpenPaneInVirtuoso: aopv === null ? DEFAULT_SETTINGS.autoOpenPaneInVirtuoso : aopv === '1',
@@ -461,6 +473,33 @@
         const el = document.getElementById('plugin-virtuoso');
         return !!(el && el.classList.contains('active'));
     }
+    // The 3D path's "now" for comparing against a gem's onset time (struck
+    // detection, fade timing, chord struck-position offsets). Virtuoso
+    // borrows highway_3d's own renderer but drives it with its OWN internal
+    // clock (window.Virtuoso.getTime(), added 2026-09-09 specifically for
+    // this) — window.highway.getTime() still exists as an object while
+    // Virtuoso is active but reads back frozen/stale (confirmed live:
+    // pinned at 0 for an entire session while real gem onset times kept
+    // advancing normally), since the standard highway's own transport isn't
+    // what's actually driving anything in that mode. Without this, every
+    // "has this note been struck yet" check (g.t <= nowT) silently never
+    // fires in Virtuoso, since a frozen 0 is always less than any real
+    // onset time — the concrete symptom was a struck note's own flying
+    // letter never yielding to the scale overlay's static board letter at
+    // the same position, visibly double-drawing at the strike point.
+    //
+    // The classic highway's separate audio/render A/V offset (getAvOffset)
+    // is a normal-highway-only concept — Virtuoso drives the renderer
+    // directly off one clock, so there's no second offset to add on top of
+    // window.Virtuoso.getTime().
+    function currentRenderNowT(hw) {
+        if (isVirtuosoActive() && window.Virtuoso && typeof window.Virtuoso.getTime === 'function') {
+            return window.Virtuoso.getTime();
+        }
+        if (!hw || !hw.getTime) return null;
+        const avOffsetSec = hw.getAvOffset ? (hw.getAvOffset() / 1000) : 0;
+        return hw.getTime() + avOffsetSec;
+    }
     // window.feedBack.currentSong can stay set to the LAST song even after
     // backing out to the library/home screen — it's not cleared just because
     // the player screen isn't showing. So currentSongFilename() alone isn't
@@ -484,17 +523,48 @@
                 : null;
         } catch (_) { return null; }
     }
-    function virtuosoKeyTonic(hw, info) {
-        const key = info && info.config && info.config.key;
+    // Finds the segmentBounds entry (window.Virtuoso.getSegmentBounds(),
+    // added 2026-09-10) whose [start, end) window contains time t — the
+    // real per-segment key/scale for a multi-block Workout session (or a
+    // key-cycling session). Falls back to the LAST segment once t moves
+    // past every window's end (e.g. during a trailing break/loop-wrap
+    // gap between segments) rather than returning nothing. Returns null
+    // when the bridge doesn't exist (unpatched Virtuoso), returns [], or
+    // t isn't a real number.
+    function virtuosoSegmentAt(t) {
+        try {
+            if (!window.Virtuoso || typeof window.Virtuoso.getSegmentBounds !== 'function') return null;
+            const bounds = window.Virtuoso.getSegmentBounds();
+            if (!Array.isArray(bounds) || !bounds.length || typeof t !== 'number') return null;
+            for (const seg of bounds) {
+                if (t >= seg.start && t < seg.end) return seg;
+            }
+            return bounds[bounds.length - 1];
+        } catch (_) { return null; }
+    }
+    // Prefers the LIVE segment's own key (virtuosoSegmentAt) over the
+    // static bundle config — getActiveBundleInfo().config.key is only
+    // ever the session's FIRST segment and never updates as a multi-block
+    // Workout (or key-cycling session) moves into a later segment with a
+    // different key. Confirmed live 2026-09-10 ("it's not switching the
+    // scale in Workout mode") — this is the exact staleness already
+    // flagged in [[virtuoso-requests-for-maintainer]]. Falls back to the
+    // static config for sessions with no segment data at all (ordinary
+    // single-exercise sessions, or an unpatched Virtuoso missing
+    // getSegmentBounds).
+    function virtuosoKeyTonic(hw, info, t) {
+        const seg = virtuosoSegmentAt(t);
+        const key = (seg && seg.key) || (info && info.config && info.config.key);
         if (!key) return null;
         return (hw && typeof hw.parseKeyToTonicPc === 'function') ? hw.parseKeyToTonicPc(key) : null;
     }
-    // Same bundle config as virtuosoKeyTonic() above, just the scale string
-    // instead of the parsed tonic — no parsing needed, it's already a plain
-    // name ("phrygian", "major", ...). Display-only for now, same as the
-    // normal-song scale readout in updateKeyStatus().
-    function virtuosoScale(info) {
-        const s = info && info.config && info.config.scale;
+    // Same live-segment-first preference as virtuosoKeyTonic above, for
+    // scale instead of key — no parsing needed, it's already a plain name
+    // ("phrygian_dominant", "major", ...). Display-only for now, same as
+    // the normal-song scale readout in updateKeyStatus().
+    function virtuosoScale(info, t) {
+        const seg = virtuosoSegmentAt(t);
+        const s = (seg && seg.scale) || (info && info.config && info.config.scale);
         return (typeof s === 'string' && s) ? s : null;
     }
     // Cosmetic only — these raw scale strings ("natural_minor",
@@ -519,7 +589,7 @@
             const ov = settings.virtuosoKeyOverride;
             if (ov === 'none') return null;
             if (typeof ov === 'number') return ov;
-            return virtuosoKeyTonic(hw, getVirtuosoBundleInfo());
+            return virtuosoKeyTonic(hw, getVirtuosoBundleInfo(), t);
         }
         const filename = currentSongFilename();
         if (filename && Object.prototype.hasOwnProperty.call(keyOverrides, filename)) {
@@ -563,7 +633,7 @@
             const ov = settings.virtuosoScaleOverride;
             if (ov === 'none') return null;
             if (ov === ALL_NOTES_ID || ov === ALL_NOTES_INLAY_ID || ov === ROOT_ONLY_ID || SCALE_INTERVALS[ov]) return ov;
-            return resolveScaleId(virtuosoScale(getVirtuosoBundleInfo()));
+            return resolveScaleId(virtuosoScale(getVirtuosoBundleInfo(), t));
         }
         const filename = currentSongFilename();
         if (filename && Object.prototype.hasOwnProperty.call(scaleOverrides, filename)) {
@@ -715,6 +785,15 @@
         if (v !== 'dots' && v !== 'notes') return;
         settings.scaleDisplayMode = v;
         try { localStorage.setItem(LS_PREFIX + 'scaleDisplayMode', v); } catch (_) {}
+    };
+    // Assigned by buildPanel() so the pane's own note-name text (key
+    // dropdown options, key status rows) relabels the moment this changes.
+    let refreshNoteNamingUI = null;
+    window.dnlSetNoteNaming = (v) => {
+        if (v !== 'letters' && v !== 'french') return;
+        settings.noteNaming = v;
+        try { localStorage.setItem(LS_PREFIX + 'noteNaming', v); } catch (_) {}
+        if (refreshNoteNamingUI) refreshNoteNamingUI();
     };
     window.dnlSetScaleUseFretColor = (v) => {
         settings.scaleUseFretColor = !!v;
@@ -905,6 +984,41 @@
 
     const NOTE_NAMES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+    // ── Note-name display (settings.noteNaming) ──────────────────────────
+    // Everything internal (chord-root matching, key/tonic lookup, the
+    // NOTE_NAMES_SHARP index) stays on the English names; ONLY text that is
+    // about to be shown to the player goes through these three helpers.
+    // French = fixed-do: Do is always C. Sharps keep '#' (Do#, Fa#); a flat
+    // in a chart-authored chord name keeps its 'b' as written (Sib).
+    const FRENCH_ROOT = { C: 'Do', D: 'Ré', E: 'Mi', F: 'Fa', G: 'Sol', A: 'La', B: 'Si' };
+
+    // 'C#' -> 'Do#' when French is selected, else unchanged.
+    function displayLetter(englishName) {
+        if (settings.noteNaming !== 'french' || typeof englishName !== 'string' || !englishName) return englishName;
+        const root = FRENCH_ROOT[englishName[0]];
+        return root ? root + englishName.slice(1) : englishName;
+    }
+
+    function displayNoteName(pc) {
+        return displayLetter(NOTE_NAMES_SHARP[pc]);
+    }
+
+    // Chart chord names ("Emin", "F#m7b5", "CMaj7/A", "Bsus2"): swap the
+    // root (and a slash chord's bass note) and leave the suffix as written.
+    // A word-like suffix (min, maj, sus, dim, aug, add) gets a space so it
+    // reads "Mi min" rather than "Mimin"; short ones stay attached ("Lam7",
+    // "Sol7"). Names that don't start like a chord are returned untouched.
+    function displayChordName(name) {
+        if (settings.noteNaming !== 'french' || typeof name !== 'string') return name;
+        const m = name.match(/^([A-G])([#b]?)([\s\S]*)$/);
+        if (!m) return name;
+        let rest = m[3];
+        if (!/^(?:$|[\d\/+\-°ø()]|m|maj|min|sus|dim|aug|add|alt)/i.test(rest)) return name;
+        rest = rest.replace(/\/([A-G])([#b]?)/, (_, l, a) => '/' + FRENCH_ROOT[l] + a);
+        const space = /^[A-Za-z]{3}/.test(rest) ? ' ' : '';
+        return FRENCH_ROOT[m[1]] + m[2] + space + rest;
+    }
+
     // Open-string MIDI (thick -> thin), matched to RS string index 0 low.
     // Mirrors highway_3d's own _BASE_OPEN_MIDI_* tables.
     const BASE_OPEN_MIDI_BASS4 = [28, 33, 38, 43];
@@ -939,6 +1053,282 @@
         const cap = Number.isFinite(capo) ? capo : 0;
         const fret = Number.isFinite(f) ? f : 0;
         return (base[s] !== undefined ? base[s] : 40) + off + cap + fret;
+    }
+
+    // ── Plugin version ───────────────────────────────────────────────────
+    // plugin.json is the ONE place the version lives. FeedBack builds its
+    // plugin list (GET /api/plugins) from every plugin.json, so read our own
+    // entry back from there instead of keeping a second copy in this file.
+    // Shown at the bottom of the settings pane and logged once at load, so
+    // anyone (or a bug report) can tell which build is running.
+    let _pluginVersionPromise = null;
+    function fetchPluginVersion() {
+        if (!_pluginVersionPromise) {
+            _pluginVersionPromise = (typeof fetch !== 'function')
+                ? Promise.resolve(null)
+                : fetch('/api/plugins')
+                    .then((res) => (res.ok ? res.json() : null))
+                    .then((j) => {
+                        const list = Array.isArray(j) ? j : ((j && j.plugins) || []);
+                        const me = list.find((p) => p && p.id === 'highway_notation');
+                        return me && me.version ? String(me.version) : null;
+                    })
+                    .catch(() => null);
+            _pluginVersionPromise.then((v) => { if (v) console.info('[highway_notation] version ' + v); });
+        }
+        return _pluginVersionPromise;
+    }
+    fetchPluginVersion();
+
+    // ── Vertical letter spread as text grows ─────────────────────────────
+    // Adjacent strings sit close together on screen (the camera looks down
+    // the neck at a shallow angle), so letters collide vertically once they
+    // get bigger than the string spacing. Leah measured the point where
+    // they just still fit: Letter size 4.5 (moved down from 5 by her, 2026-09-21) for the highway
+    // notes, Scale size 1.2 for the fretboard letters (1.0 also fits; she
+    // moved the start to 1.1 live 2026-09-21 after 1.0 spread the gaps too
+    // wide at 1.5). Above
+    // that, the DRAWN TEXT is pushed away from the centre of its own group
+    // by k = size / fit-size, which keeps the relative gap the letters had
+    // at the fit size (both the letter and the spacing between neighbours
+    // grow by k). Only the text moves; gems, boxes and frets don't. A lone
+    // note is its own group centre, so it never moves. Vertical only: the
+    // horizontal neighbours have room in every screenshot she sent.
+    const LETTER_FIT_SIZE = 4.5;
+    const SCALE_FIT_SIZE = 1.2;
+
+    function spreadFactor(size, fitSize) {
+        return size > fitSize ? size / fitSize : 1;
+    }
+
+    // Mean py of the fret-grid entries at each fret = the centre of that
+    // fret's column of strings. Uses every string, not just the drawn ones,
+    // so each string keeps a fixed slot whichever letters are showing.
+    function fretColumnCentersPy(grid, H) {
+        const sum = new Map();
+        const cnt = new Map();
+        for (let i = 0; i < grid.length; i++) {
+            const p = grid[i];
+            const py = ((1 - p.sy) / 2) * H;
+            sum.set(p.f, (sum.get(p.f) || 0) + py);
+            cnt.set(p.f, (cnt.get(p.f) || 0) + 1);
+        }
+        const out = new Map();
+        for (const [f, s] of sum) out.set(f, s / cnt.get(f));
+        return out;
+    }
+
+    // Vertical spread of one chord/strum group, CONTINUOUS in size and in
+    // distance. Notes on directly adjacent strings are linked, each link
+    // weighted by how close the two letters are sideways (1 within 0.45 of a
+    // letter width, easing to 0 by 0.75, so the old hard "same column" line
+    // at 0.6 is the middle of the ease; the gems' own fret spacing decides
+    // which letters count as close). A linked pair wants its vertical gap
+    // grown by (K - 1) times, scaled by that weight. Solved as a small
+    // least-squares problem (every note also wants to stay put), so each note
+    // moves the least it can while its links get what they want: a lone note
+    // stays exactly where it is, a stack spreads about its middle, and
+    // nothing switches on or off at a threshold size. (Two earlier versions
+    // used hard "same column" grouping and then merging of neighbouring
+    // groups; both flipped at one size and more than doubled the spacing,
+    // found live 2026-09-21.) Duplicate copies of a note (the bridge feeds
+    // each fretted note twice) get the same shift. Writes into out.
+    const SPREAD_STIFFNESS = 200;
+    function chordVerticalSpread(group, K, sizeK, out) {
+        const dupes = new Map();
+        for (const g of group) {
+            let list = dupes.get(g.s);
+            if (!list) { list = []; dupes.set(g.s, list); }
+            list.push(g);
+        }
+        const reps = Array.from(dupes.values()).map((l) => l[0]).sort((a, b) => a.s - b.s);
+        const n = reps.length;
+        if (n < 2) return;
+        const fontOf = (g) => Math.max(1, g.fontPxUnit * sizeK);
+        // How strongly two notes' letters are tied together sideways.
+        const closeness = (a, b) => {
+            const f = (fontOf(a) + fontOf(b)) / 2;
+            const t = Math.min(1, Math.max(0, (0.75 * f - Math.abs(b.px - a.px)) / (0.3 * f)));
+            return t * t * (3 - 2 * t);
+        };
+        // Least-squares solve of: sum(x_i^2) + sum(k_l * (x_b - x_a - e_l)^2)
+        // for links {a, b, k, e} (indices into reps); returns null if none.
+        const solve = (links) => {
+            if (!links.length) return null;
+            const A = Array.from({ length: n }, (_, i) => { const row = new Array(n).fill(0); row[i] = 1; return row; });
+            const rhs = new Array(n).fill(0);
+            for (const { a, b, k, e } of links) {
+                A[a][a] += k; A[b][b] += k; A[a][b] -= k; A[b][a] -= k;
+                rhs[a] -= k * e; rhs[b] += k * e;
+            }
+            // Gaussian elimination with partial pivoting (n is at most about 8).
+            for (let c = 0; c < n; c++) {
+                let p = c;
+                for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+                if (p !== c) { [A[p], A[c]] = [A[c], A[p]]; [rhs[p], rhs[c]] = [rhs[c], rhs[p]]; }
+                for (let r = c + 1; r < n; r++) {
+                    const m = A[r][c] / A[c][c];
+                    if (m === 0) continue;
+                    for (let cc = c; cc < n; cc++) A[r][cc] -= m * A[c][cc];
+                    rhs[r] -= m * rhs[c];
+                }
+            }
+            const sol = new Array(n).fill(0);
+            for (let r = n - 1; r >= 0; r--) {
+                let s = rhs[r];
+                for (let cc = r + 1; cc < n; cc++) s -= A[r][cc] * sol[cc];
+                sol[r] = s / A[r][r];
+            }
+            return sol;
+        };
+        // Pass 1: notes on directly adjacent strings want their gap grown by K.
+        // (Tried replacing this with a "clear the letters fully" target, like
+        // pass 2 below, after a Gsus2's fretted D/G pushed apart enough to
+        // read as the wrong string — but that target (near a full letter
+        // height) needed FAR more push than this K-based one ever gave, and
+        // scaling it down to avoid that regressed badly elsewhere (many more
+        // chords left overlapping at moderate sizes). Reverted: this simple
+        // version is the one already checked broadly OK. The Gsus2 case is
+        // real and still open — see NOTATION_BACKLOG.md.)
+        const adj = [];
+        for (let i = 0; i + 1 < n; i++) {
+            const a = reps[i], b = reps[i + 1];
+            if (b.s - a.s !== 1) continue;
+            // Only fretted<->fretted neighbours spread each other vertically.
+            // Fretted letters stay over their own gems, and open letters stay
+            // centred on their own strings: an open letter that would land on
+            // another letter moves SIDEWAYS instead (see openLetterShifts).
+            if (a.f === 0 || b.f === 0) continue;
+            const w = closeness(a, b);
+            if (w > 0) adj.push({ a: i, b: i + 1, k: SPREAD_STIFFNESS * w, e: w * (K - 1) * (b.py - a.py) });
+        }
+        let x = solve(adj);
+        if (!x) return;
+        // Pass 2: notes a string or more apart (skipping strings) only ask for
+        // whatever gap is still missing after pass 1 to keep one letter
+        // height between them, again scaled by sideways closeness; so a lone
+        // bass note is not run over by a group spreading toward it, and the
+        // push starts at zero.
+        const skip = [];
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const a = reps[i], b = reps[j];
+                if (b.s - a.s <= 1) continue;
+                if (a.f === 0 || b.f === 0) continue; // same rule as pass 1
+                const w = closeness(a, b);
+                if (w <= 0) continue;
+                const d = b.py - a.py;
+                const moved = x[j] - x[i];
+                const need = 0.95 * (fontOf(a) + fontOf(b)) / 2;
+                const deficit = Math.max(0, need - Math.abs(d + moved));
+                if (deficit > 0) skip.push({ a: i, b: j, k: SPREAD_STIFFNESS * w, e: moved + w * deficit * Math.sign(d) });
+            }
+        }
+        if (skip.length) x = solve(adj.concat(skip));
+        for (let i = 0; i < n; i++) {
+            if (Math.abs(x[i]) < 0.01) continue;
+            for (const d of dupes.get(reps[i].s)) out.set(d, x[i]);
+        }
+    }
+
+    // Open-string (strum) letters in a chord sit at the centre of the strum
+    // box, which lands them on top of the fretted gems' letters. Gems keep
+    // priority (their letters stay centred on the gem); an open letter that
+    // would overlap one slides left or right to the nearest free spot,
+    // staying inside the chord box when it can. Returns Map(entry -> dx px)
+    // for the open entries that had to move; duplicate copies of a note
+    // (the bridge feeds each twice) get the same dx.
+    //   drawn: entries in ONE chord group whose letters will actually draw
+    //   dyOf(g): the vertical spread already applied to g
+    //   letterOf(g) / fontOf(g): its text and font size in px
+    //   bounds: { minX, maxX } of the chord box, or null
+    // Vertical overlap (in letter heights) at which an open letter reaches its
+    // full sideways shift; below that it eases in proportionally. Bigger = a
+    // longer, gentler glide (but a little residual overlap while easing).
+    const OPEN_SHIFT_EASE = 0.4;
+    // Once a chord's letters are on the highway, their overlap shifts (an
+    // open letter's sideways move AND the vertical spread) are decided ONCE,
+    // the first time the chord is drawn, and never change afterwards (her
+    // call 2026-09-21: nothing should shift while a chord travels toward the
+    // fretboard). Stored per note (chord onset + string) as fractions of the
+    // letter's own size, so the held offset still scales with perspective.
+    // Cleared when a setting that changes the layout changes, and forgotten
+    // once a note hasn't been drawn for SHIFT_HELD_FORGET_MS.
+    const SHIFT_HELD_FORGET_MS = 1500;
+    let _shiftHeld = new Map();
+    let _shiftHeldSig = '';
+
+    function openLetterShifts(ctx, drawn, dyOf, letterOf, fontOf, bounds) {
+        const shifts = new Map();
+        const rectOf = (g, dx) => {
+            const font = fontOf(g);
+            ctx.font = Math.round(font) + 'px sans-serif';
+            // Plus room for the black outline drawn around every letter
+            // (stroke = 12% of the font each side) and a little air, so two
+            // letters that only just touch by raw text width still count as
+            // overlapping: they DO visibly overlap once the outline is on.
+            const w = ctx.measureText(letterOf(g)).width + font * 0.3;
+            return { cx: g.px + dx, cy: g.py + dyOf(g), w, h: font * 0.9 };
+        };
+        // One representative per string; duplicates are just copies.
+        const uniq = new Map();
+        for (const g of drawn) { if (!uniq.has(g.s)) uniq.set(g.s, []); uniq.get(g.s).push(g); }
+        const fretted = [], opens = [];
+        for (const list of uniq.values()) (list[0].f === 0 ? opens : fretted).push(list);
+        if (!opens.length) return shifts;
+        // The shift is CONTINUOUS in the geometry (in size and distance), so
+        // a letter never snaps. Each nearby letter asks for the horizontal
+        // move that would clear it, scaled by weight(): 0 while the two
+        // letters are only just touching (or apart) vertically, easing up to
+        // 1 as they overlap vertically by more than OPEN_SHIFT_EASE
+        // letter-heights. So the shift eases in/out with the vertical
+        // overlap instead of switching on at one size.
+        const weight = (p, q) => {
+            const overlapY = (p.h + q.h) / 2 - Math.abs(p.cy - q.cy); // > 0: overlapping vertically
+            if (overlapY <= 0) return 0;
+            const t = Math.min(1, overlapY / (OPEN_SHIFT_EASE * Math.min(p.h, q.h)));
+            return t * t * (3 - 2 * t);
+        };
+        // Open letters stay centred on their own strings vertically (they are
+        // not spread). Sideways, they're placed one at a time, top of the
+        // screen first: each one clears whatever's ALREADY PLACED — the
+        // fretted letters (which never move) and any open letter placed
+        // before it — then joins the obstacle list itself. So an open letter
+        // only moves if it actually overlaps something; three adjacent open
+        // strings that all clash (G/B/E on an Em shape) cascade rightward one
+        // at a time instead of all shifting together (her call 2026-09-21).
+        // Every open letter moves RIGHT ONLY, never left: a left/right choice
+        // (e.g. "whichever obstacle's edge is closer") flips at some size or
+        // between two nearly-coincident open letters (found live 2026-09-21,
+        // a Csus2's open D and G: D got pushed right, then G, sitting almost
+        // exactly on top of D, read as "just barely left of D" and got
+        // pushed the WRONG way instead of following it right) and the letter
+        // jumps. Each obstacle asks for the rightward hop that clears its own
+        // right edge, scaled by how much they overlap vertically (weight)
+        // and sideways (eases in from zero as they start to overlap, so no
+        // switch at one size); the biggest ask wins. Capped at the right edge
+        // of the chord box.
+        const obstacles = fretted.map((l) => rectOf(l[0], 0));
+        const ordered = opens.slice().sort((a, b) => a[0].py - b[0].py);
+        for (const list of ordered) {
+            const g = list[0];
+            const me = rectOf(g, 0);
+            let dx = 0;
+            for (const o of obstacles) {
+                const half = (me.w + o.w) / 2;
+                const pen = half - Math.abs(me.cx - o.cx); // > 0: overlapping sideways
+                if (pen <= 0) continue;
+                const wt = weight(me, o);
+                if (wt <= 0) continue;
+                const t = Math.min(1, pen / (0.5 * half));
+                const sideways = t * t * (3 - 2 * t);
+                dx = Math.max(dx, wt * sideways * (o.cx + half - me.cx)); // hop clear of its right edge
+            }
+            if (bounds && dx > 0) dx = Math.min(dx, Math.max(0, bounds.maxX - (me.cx + me.w / 2)));
+            if (dx !== 0) for (const d of list) shifts.set(d, dx);
+            obstacles.push({ cx: me.cx + dx, cy: me.cy, w: me.w, h: me.h });
+        }
+        return shifts;
     }
 
     function letterForMidi(midi) {
@@ -990,6 +1380,20 @@
             let arr = timeGroups.get(key);
             if (!arr) { arr = []; timeGroups.set(key, arr); }
             arr.push(g);
+        }
+        // Vertical letter spread for chord/strum notes — see spreadFactor and
+        // chordVerticalSpread. Individual, not per-chord: a note only moves
+        // if a note on a directly adjacent string is close to it sideways,
+        // and the whole thing is continuous in size and distance (no hard
+        // "same column" switch). Empty (nothing moves) at or below the fit
+        // size. Keyed by the entry object the draw loop iterates.
+        const gemSpreadK = spreadFactor(settings.sizeK, LETTER_FIT_SIZE);
+        let gemSpreadDy = null;
+        if (gemSpreadK > 1) {
+            gemSpreadDy = new Map();
+            for (const arr of timeGroups.values()) {
+                if (arr.length >= 2) chordVerticalSpread(arr, gemSpreadK, settings.sizeK, gemSpreadDy);
+            }
         }
         // Root lookup (needed for chordMode 'root' and 'name'): within each
         // >1-entry group, prefer the chart's own chord name (real musical root,
@@ -1117,6 +1521,70 @@
             }
         }
 
+        // Open-string letters that would land on a fretted gem's letter in
+        // the same chord slide sideways (see openLetterShifts). Only groups
+        // that draw 2+ plain letters: 'all' mode, or 'name' mode when the
+        // chord has no name to show (there the name replaces the letters).
+        // NOTE: realChordKeys only exists for modes 'none'/'root'/'name', so
+        // 'all' mode must not depend on it (first version did, and never ran
+        // in 'all' mode, found live 2026-09-21). Plain letters only; chord
+        // NAMES are positioned separately.
+        const openShiftDx = new Map();
+        const heldDy = new Map(); // entry -> held vertical spread (px) for chord letters
+        const heldNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+        const heldSig = [settings.sizeK, settings.noteNaming, settings.chordMode, settings.showOpen, settings.showFretted,
+            ctx.canvas ? ctx.canvas.width + 'x' + ctx.canvas.height : ''].join('|');
+        if (heldSig !== _shiftHeldSig) { _shiftHeld = new Map(); _shiftHeldSig = heldSig; }
+        // Vertical spread, held per note: decided the first time its chord is
+        // drawn, then reused every frame (see SHIFT_HELD_FORGET_MS above).
+        for (const [ckey, carr] of timeGroups) {
+            if (carr.length < 2) continue;
+            for (const g of carr) {
+                const font = Math.max(1, g.fontPxUnit * settings.sizeK);
+                const key = ckey + '|' + g.s;
+                let st = _shiftHeld.get(key);
+                if (!st) {
+                    st = { dy: ((gemSpreadDy && gemSpreadDy.get(g)) || 0) / font, dx: null, seen: heldNow };
+                    _shiftHeld.set(key, st);
+                }
+                st.seen = heldNow;
+                heldDy.set(g, st.dy * font);
+            }
+        }
+        if (settings.chordMode === 'all' || (realChordKeys && settings.chordMode === 'name')) {
+            for (const [ckey, carr] of timeGroups) {
+                if (carr.length < 2) continue;
+                if (settings.chordMode === 'name'
+                    && realChordKeys.has(ckey) && chordDisplayNameByTime && chordDisplayNameByTime.get(ckey)) continue;
+                const drawnNow = carr.filter((g) => !g.letterSuppressed && (g.f === 0 ? settings.showOpen : settings.showFretted));
+                let bounds = null;
+                const fr = chordFrameByTime.get(ckey);
+                if (fr && Number.isFinite(fr.blx) && Number.isFinite(fr.brx)) {
+                    bounds = { minX: Math.min(fr.blx, fr.brx), maxX: Math.max(fr.blx, fr.brx) };
+                }
+                // Only work out the sideways shift for open letters that don't
+                // have a held one yet (i.e. the first time this chord is drawn).
+                const needShift = drawnNow.some((g) => g.f === 0 && _shiftHeld.get(ckey + '|' + g.s).dx === null);
+                const shifts = needShift ? openLetterShifts(
+                    ctx, drawnNow,
+                    (g) => heldDy.get(g) || 0,
+                    (g) => displayLetter(noteLetter(tuning, capo, arrangement, g.s, g.f)),
+                    (g) => Math.max(1, g.fontPxUnit * settings.sizeK),
+                    bounds,
+                ) : null;
+                for (const g of drawnNow) {
+                    if (g.f !== 0) continue;
+                    const font = Math.max(1, g.fontPxUnit * settings.sizeK);
+                    const st = _shiftHeld.get(ckey + '|' + g.s);
+                    if (st.dx === null && shifts) st.dx = (shifts.get(g) || 0) / font;
+                    if (st.dx && Math.abs(st.dx * font) > 0.05) openShiftDx.set(g, st.dx * font);
+                }
+            }
+        }
+        for (const [k, st] of _shiftHeld) {
+            if (heldNow - st.seen > SHIFT_HELD_FORGET_MS) _shiftHeld.delete(k);
+        }
+
         for (const g of entries) {
             const key = Math.round(g.t * 1000);
             const isOpen = g.f === 0;
@@ -1163,7 +1631,7 @@
             // comment at the push site for why this used to drop the whole
             // chord instead of just its per-note letters.
             if (!overrideText && g.letterSuppressed) continue;
-            const letter = overrideText || noteLetter(tuning, capo, arrangement, g.s, g.f);
+            const letter = overrideText ? displayChordName(overrideText) : displayLetter(noteLetter(tuning, capo, arrangement, g.s, g.f));
             if (!letter || !Number.isFinite(g.fontPxUnit)) continue;
             // Drag-pad offset (settings.offsetX/Y, each -1..1) scaled by this
             // gem's own fontPx so the letter moves a consistent distance
@@ -1193,9 +1661,10 @@
             // reading static/highway.js directly. getAvOffset() (ms) reads
             // the LIVE per-user setting every frame, self-correcting for
             // whatever each individual player has their own A/V offset
-            // dialed to.
-            const avOffsetSec = hw && hw.getAvOffset ? (hw.getAvOffset() / 1000) : 0;
-            const nowT = hw && hw.getTime ? hw.getTime() + avOffsetSec : null;
+            // dialed to. currentRenderNowT() (2026-09-09) picks the right
+            // clock for this — see its own comment for why this can't just
+            // stay hw.getTime()+avOffset while Virtuoso is active.
+            const nowT = currentRenderNowT(hw);
             const isStruck = overrideText && nowT !== null && g.t <= nowT;
             const range = overrideText ? (isStruck ? settings.chordStruckRange : CHORD_OFFSET_RANGE) : OFFSET_RANGE;
             // Fade the chord name in as it approaches the strike line —
@@ -1215,8 +1684,13 @@
             // Flat correction, X only, once struck — Leah's final
             // live-confirmed value, 2026-09-05; retune by feel.
             const CHORD_STRUCK_X_CORRECTION_PX = -35;
-            const px = basePx + offX * offsetFontPx * range + (isStruck ? CHORD_STRUCK_X_CORRECTION_PX : 0);
-            const py = basePy + offY * offsetFontPx * range;
+            const px = basePx + offX * offsetFontPx * range + (isStruck ? CHORD_STRUCK_X_CORRECTION_PX : 0)
+                + (!overrideText ? (openShiftDx.get(g) || 0) : 0);
+            // Plain note letters only: a chord NAME is one label with
+            // nothing beside it to collide with.
+            let spreadDy = 0;
+            if (!overrideText) spreadDy = heldDy.get(g) || 0;
+            const py = basePy + offY * offsetFontPx * range + spreadDy;
             // Chord names (chordMode 'name') borrow highway_3d's own gold
             // chord-label styling (#e8d080, bold) instead of the plain note
             // letter's color/weight — a visual cue that this is a chord name,
@@ -1360,6 +1834,8 @@
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000000';
             ctx.globalAlpha = alpha;
+            const spreadK = spreadFactor(settings.scaleDotSizeMul, SCALE_FIT_SIZE);
+            const colCenters = spreadK > 1 ? fretColumnCentersPy(grid, H) : null;
             for (let i = 0; i < grid.length; i++) {
                 const p = grid[i];
                 // Open strings (f===0) count as a marker position too, same
@@ -1370,10 +1846,11 @@
                 // Root Note Only: skip every position that isn't the current
                 // key's tonic pitch class — the whole point of this mode.
                 if (isRootOnly && ((Math.round(midi) % 12) + 12) % 12 !== tonicPc) continue;
-                const letter = letterForMidi(midi);
+                const letter = displayLetter(letterForMidi(midi));
                 const sx = openStringShiftedSx(grid, i, p);
                 const px = ((sx + 1) / 2) * W;
-                const py = ((1 - p.sy) / 2) * H;
+                let py = ((1 - p.sy) / 2) * H;
+                if (colCenters) { const cy = colCenters.get(p.f); py = cy + (py - cy) * spreadK; }
                 ctx.fillStyle = settings.matchGemColor ? gemColorForString(p.s) : settings.color;
                 ctx.strokeText(letter, px, py);
                 ctx.fillText(letter, px, py);
@@ -1402,6 +1879,9 @@
             ctx.strokeStyle = '#000000';
         }
         const RADIUS = Math.max(2, Math.min(W, H) * 0.006) * settings.scaleDotSizeMul;
+        // Letters only: dots keep their exact string positions.
+        const spreadK = asNotes ? spreadFactor(settings.scaleDotSizeMul, SCALE_FIT_SIZE) : 1;
+        const colCenters = spreadK > 1 ? fretColumnCentersPy(grid, H) : null;
         for (let i = 0; i < grid.length; i++) {
             const p = grid[i];
             const midi = noteMidi(tuning, capo, arrangement, p.s, p.f);
@@ -1412,12 +1892,13 @@
             // the gem/letter path above uses.
             const sx = openStringShiftedSx(grid, i, p);
             const px = ((sx + 1) / 2) * W;
-            const py = ((1 - p.sy) / 2) * H;
+            let py = ((1 - p.sy) / 2) * H;
+            if (colCenters) { const cy = colCenters.get(p.f); py = cy + (py - cy) * spreadK; }
             const fillColor = settings.scaleUseFretColor ? gemColorForString(p.s) : settings.color;
             ctx.globalAlpha = isRoot ? rootAlpha : baseAlpha;
             if (asNotes) {
                 ctx.fillStyle = fillColor;
-                const letter = letterForMidi(midi);
+                const letter = displayLetter(letterForMidi(midi));
                 ctx.strokeText(letter, px, py);
                 ctx.fillText(letter, px, py);
             } else {
@@ -1562,9 +2043,33 @@
         _lastVirtuosoActiveForAutoOpen = active;
     }
 
+    // Adds a "Highway Notation settings" item to Virtuoso's own ⚙ Settings
+    // menu (window.Virtuoso.registerSettingsMenuItem, added 2026-09-09) —
+    // Virtuoso has no Panes sidebar of its own, so without this a player has
+    // to open this pane from the normal player screen BEFORE switching into
+    // Virtuoso, or it's unreachable for the rest of that session. Polled
+    // from the draw loop (cheap once registered — just an if-check) rather
+    // than a single startup call, since plugin load order isn't guaranteed
+    // and window.Virtuoso may not exist yet the first few frames.
+    let _virtuosoMenuItemRegistered = false;
+    function registerWithVirtuosoSettingsMenu() {
+        if (_virtuosoMenuItemRegistered) return;
+        if (!window.Virtuoso || typeof window.Virtuoso.registerSettingsMenuItem !== 'function') return;
+        window.Virtuoso.registerSettingsMenuItem({
+            id: 'highway_notation',
+            label: 'Highway Notation settings ↗',
+            onClick: () => {
+                const panes = window.feedBack && window.feedBack.panes;
+                if (panes && typeof panes.open === 'function') panes.open('highway_notation');
+            },
+        });
+        _virtuosoMenuItemRegistered = true;
+    }
+
     function draw() {
         rafId = requestAnimationFrame(draw);
         checkAutoOpenPaneInVirtuoso();
+        registerWithVirtuosoSettingsMenu();
 
         // One-time 2D draw-hook registration, done here purely because this
         // RAF loop always runs regardless of which renderer is mounted, so
@@ -1620,8 +2125,7 @@
         // decide gem-letter suppression timing below, which needs to match
         // the RENDER clock the gem's on-screen position is actually drawn
         // against, not the raw audio clock.
-        const avOffsetSec = hw && hw.getAvOffset ? (hw.getAvOffset() / 1000) : 0;
-        const nowT = hw && hw.getTime ? hw.getTime() + avOffsetSec : 0;
+        const nowT = currentRenderNowT(hw) ?? 0;
         const scaleId = effectiveScaleName(hw, nowT);
         const isAllNotesOrRoot = scaleId === ALL_NOTES_ID || scaleId === ALL_NOTES_INLAY_ID || scaleId === ROOT_ONLY_ID;
         const needsTonic = scaleId === ROOT_ONLY_ID || (scaleId && !!SCALE_INTERVALS[scaleId]);
@@ -2543,11 +3047,15 @@
         keyNoneOpt.value = 'none';
         keyNoneOpt.textContent = 'Off';
         keySelect.appendChild(keyNoneOpt);
+        // Kept so refreshNoteNamingUI can relabel them when the note-name
+        // style changes (values stay the pitch-class number).
+        const keyNoteOpts = [];
         NOTE_NAMES_SHARP.forEach((name, pc) => {
             const opt = document.createElement('option');
             opt.value = String(pc);
-            opt.textContent = name;
+            opt.textContent = displayNoteName(pc);
             keySelect.appendChild(opt);
+            keyNoteOpts.push(opt);
         });
         keySelect.addEventListener('change', () => {
             const v = keySelect.value === '' ? null : keySelect.value;
@@ -2609,18 +3117,54 @@
         });
         appearanceCol2.appendChild(scaleSelect);
 
+        // Note-name style: applies to EVERY note name the plugin shows (gem
+        // letters, chord names, scale letters, key dropdown/status) — never
+        // a mix of the two. Sits in this Key, Scale & Root Highlight group,
+        // above the scale display picker (Leah's placement, 2026-09-21).
+        // Note names and Scale display share ONE row, split into two even
+        // halves — the same flex:1 two-halves pattern as the Letter size /
+        // Chord name size sliders in the Appearance column (Leah's layout
+        // ask, 2026-09-21).
+        const dropdownsRow = document.createElement('div');
+        dropdownsRow.style.cssText = 'display:flex;gap:10px;margin-top:8px;padding-left:15px;';
+        const noteNamingWrap = document.createElement('div');
+        noteNamingWrap.style.cssText = 'flex:1;min-width:0;';
+        const scaleModeWrap = document.createElement('div');
+        scaleModeWrap.style.cssText = 'flex:1;min-width:0;';
+        dropdownsRow.appendChild(noteNamingWrap);
+        dropdownsRow.appendChild(scaleModeWrap);
+        appearanceCol2.appendChild(dropdownsRow);
+
+        const noteNamingLabel = document.createElement('div');
+        noteNamingLabel.style.cssText = 'color:#d1d5db;margin-bottom:4px;';
+        noteNamingLabel.textContent = 'Note names:';
+        noteNamingWrap.appendChild(noteNamingLabel);
+
+        const noteNamingSelect = document.createElement('select');
+        noteNamingSelect.style.cssText = 'width:calc(100% - 3px);background:#1f2937;border:1px solid #374151;border-radius:6px;color:#d1d5db;padding:4px 6px;';
+        // Short option text: this select is only half a column wide now.
+        [['letters', 'Letters (C D E)'], ['french', 'French (Do Ré Mi)']].forEach(([id, label]) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = label;
+            noteNamingSelect.appendChild(opt);
+        });
+        noteNamingSelect.value = settings.noteNaming;
+        noteNamingSelect.addEventListener('change', () => window.dnlSetNoteNaming(noteNamingSelect.value));
+        noteNamingWrap.appendChild(noteNamingSelect);
+
         // Real-scale display: dots (original behavior) vs the actual note
         // letters at each scale-tone position — Leah's ask 2026-09-06, same
         // "notes vs dots" split the All Notes overlay already has built in
         // (it always draws letters), just exposed as a choice here since a
         // real scale's shape-across-the-neck point works either way.
         const scaleModeLabel = document.createElement('div');
-        scaleModeLabel.style.cssText = 'color:#d1d5db;margin-top:8px;margin-bottom:4px;padding-left:15px;';
+        scaleModeLabel.style.cssText = 'color:#d1d5db;margin-bottom:4px;';
         scaleModeLabel.textContent = 'Scale display:';
-        appearanceCol2.appendChild(scaleModeLabel);
+        scaleModeWrap.appendChild(scaleModeLabel);
 
         const scaleModeSelect = document.createElement('select');
-        scaleModeSelect.style.cssText = 'width:calc(100% - 18px);background:#1f2937;border:1px solid #374151;border-radius:6px;color:#d1d5db;padding:4px 6px;margin-left:15px;';
+        scaleModeSelect.style.cssText = 'width:calc(100% - 3px);background:#1f2937;border:1px solid #374151;border-radius:6px;color:#d1d5db;padding:4px 6px;';
         [['dots', 'Dots'], ['notes', 'Note letters']].forEach(([id, label]) => {
             const opt = document.createElement('option');
             opt.value = id;
@@ -2629,7 +3173,7 @@
         });
         scaleModeSelect.value = settings.scaleDisplayMode;
         scaleModeSelect.addEventListener('change', () => window.dnlSetScaleDisplayMode(scaleModeSelect.value));
-        appearanceCol2.appendChild(scaleModeSelect);
+        scaleModeWrap.appendChild(scaleModeSelect);
 
         // Same on/off convention as matchGemRow above (see colorRow/
         // matchGemRow comment) but for the scale overlay's own color: off
@@ -2646,55 +3190,74 @@
         // Scale overlay dot size + opacity — same slider convention as the
         // ring-thickness control below (label with live value, then a
         // <input type=range>).
+        // Scale size and Scale opacity share one row, two even halves (same
+        // pattern as the dropdown row above and the Letter/Chord size row).
+        const scaleSlidersRow = document.createElement('div');
+        scaleSlidersRow.style.cssText = 'display:flex;gap:10px;margin-top:8px;padding-left:15px;';
+        const dotSizeWrap = document.createElement('div');
+        dotSizeWrap.style.cssText = 'flex:1;min-width:0;';
+        const dotOpacityWrap = document.createElement('div');
+        dotOpacityWrap.style.cssText = 'flex:1;min-width:0;';
+        scaleSlidersRow.appendChild(dotSizeWrap);
+        scaleSlidersRow.appendChild(dotOpacityWrap);
+        appearanceCol2.appendChild(scaleSlidersRow);
+
         const dotSizeLabel = document.createElement('div');
-        dotSizeLabel.style.cssText = 'color:#d1d5db;margin:8px 0 4px;padding-left:15px;';
+        dotSizeLabel.style.cssText = 'color:#d1d5db;margin-bottom:4px;';
         const dotSizeValSpan = document.createElement('span');
         dotSizeValSpan.textContent = settings.scaleDotSizeMul.toFixed(2);
         dotSizeLabel.textContent = 'Scale size — ';
         dotSizeLabel.appendChild(dotSizeValSpan);
-        appearanceCol2.appendChild(dotSizeLabel);
+        dotSizeWrap.appendChild(dotSizeLabel);
 
         const dotSizeInput = document.createElement('input');
         dotSizeInput.type = 'range';
         dotSizeInput.min = '0.2'; dotSizeInput.max = '3'; dotSizeInput.step = '0.1';
         dotSizeInput.value = String(settings.scaleDotSizeMul);
-        // Fills col2's width minus its own 15px left indent, minus 3px of
-        // separation — same "fill the column" convention as col1's sliders.
-        dotSizeInput.style.cssText = 'width:calc(100% - 18px);margin-left:15px;';
+        // Fills its own half-width wrapper minus 3px of separation — same
+        // convention as the Letter size / Chord name size sliders.
+        dotSizeInput.style.cssText = 'width:calc(100% - 3px);';
         dotSizeInput.addEventListener('input', () => {
             dotSizeValSpan.textContent = parseFloat(dotSizeInput.value).toFixed(2);
             window.dnlSetScaleDotSizeMul(dotSizeInput.value);
         });
-        appearanceCol2.appendChild(dotSizeInput);
+        dotSizeWrap.appendChild(dotSizeInput);
 
         const dotOpacityLabel = document.createElement('div');
-        dotOpacityLabel.style.cssText = 'color:#d1d5db;margin:8px 0 4px;padding-left:15px;';
+        dotOpacityLabel.style.cssText = 'color:#d1d5db;margin-bottom:4px;';
         const dotOpacityValSpan = document.createElement('span');
         dotOpacityValSpan.textContent = String(settings.scaleDotOpacity);
         dotOpacityLabel.textContent = 'Scale opacity — ';
         dotOpacityLabel.appendChild(dotOpacityValSpan);
-        appearanceCol2.appendChild(dotOpacityLabel);
+        dotOpacityWrap.appendChild(dotOpacityLabel);
 
         const dotOpacityInput = document.createElement('input');
         dotOpacityInput.type = 'range';
         dotOpacityInput.min = '0'; dotOpacityInput.max = '100'; dotOpacityInput.step = '5';
         dotOpacityInput.value = String(settings.scaleDotOpacity);
-        dotOpacityInput.style.cssText = 'width:calc(100% - 18px);margin-left:15px;';
+        dotOpacityInput.style.cssText = 'width:calc(100% - 3px);';
         dotOpacityInput.addEventListener('input', () => {
             dotOpacityValSpan.textContent = dotOpacityInput.value;
             window.dnlSetScaleDotOpacity(dotOpacityInput.value);
         });
-        appearanceCol2.appendChild(dotOpacityInput);
+        dotOpacityWrap.appendChild(dotOpacityInput);
 
         // Virtuoso doesn't expose the Panes sidebar itself — this pane has
         // to be opened BEFORE switching into Virtuoso or there's no way to
         // reach it otherwise. Auto-open removes that gotcha; checkbox lets
         // anyone who finds the auto-pop-up intrusive turn it back off.
+        // Lives at the very bottom of the Appearance column (appearanceCol1,
+        // under the pad row that ends with Background opacity), with a gap
+        // above it — moved there from the Key/Scale column 2026-09-21 per
+        // Leah. Nothing else is appended to appearanceCol1 after this.
+        const autoOpenGap = document.createElement('div');
+        autoOpenGap.style.cssText = 'height:14px;';
+        appearanceCol1.appendChild(autoOpenGap);
         const cbAutoOpenVirtuoso = mkCheckRow(
             'Auto-open this pane when Virtuoso is selected',
             settings.autoOpenPaneInVirtuoso,
             window.dnlSetAutoOpenPaneInVirtuoso,
-            appearanceCol2,
+            appearanceCol1,
         );
 
         // Ring color + thickness — only meaningful while the highlight
@@ -2746,10 +3309,11 @@
             // Virtuoso branch.
             if (isVirtuosoActive()) {
                 const info = getVirtuosoBundleInfo();
-                const tonic = virtuosoKeyTonic(hw, info);
+                const vNow = currentRenderNowT(hw);
+                const tonic = virtuosoKeyTonic(hw, info, vNow);
                 keyStatusRow.textContent = tonic === null
                     ? 'Key (from Virtuoso): none set'
-                    : 'Key (from Virtuoso): ' + NOTE_NAMES_SHARP[tonic];
+                    : 'Key (from Virtuoso): ' + displayNoteName(tonic);
                 const kov = settings.virtuosoKeyOverride;
                 blankOpt.textContent = '— auto (trust Virtuoso) —';
                 // Blank ("auto") unless an actual manual override is set —
@@ -2758,7 +3322,7 @@
                 keySelect.value = kov === null || kov === undefined ? '' : String(kov);
                 keySelect.disabled = false;
                 keyStatusRow.style.opacity = '1';
-                const scale = virtuosoScale(info);
+                const scale = virtuosoScale(info, vNow);
                 if (scale) {
                     scaleStatusRow.textContent = 'Scale (from Virtuoso): ' + prettyScaleName(scale);
                     scaleStatusRow.style.display = '';
@@ -2857,7 +3421,7 @@
             // changed 2026-09-06 per explicit ask: show the real key, not
             // just whether one exists.
             keyStatusRow.textContent = 'Does song have key data: ' + (hasOverride ? 'Manual'
-                : hasAutoTonic ? NOTE_NAMES_SHARP[auto]
+                : hasAutoTonic ? displayNoteName(auto)
                 : (hasKeys ? 'Yes (unresolved)' : 'No'));
 
             // Dropdown only reflects an EXPLICIT override now — on auto, it
@@ -2904,6 +3468,13 @@
             scaleStatusRow.style.opacity = (hasTonic || pickNeedsNoTonic) ? '1' : '0.5';
         };
         updateKeyStatus();
+        // Relabel the pane's own note-name text when the style changes: the
+        // key dropdown's 12 options, and the status rows via a fresh update.
+        refreshNoteNamingUI = () => {
+            keyNoteOpts.forEach((opt, pc) => { opt.textContent = displayNoteName(pc); });
+            noteNamingSelect.value = settings.noteNaming;
+            updateKeyStatus();
+        };
         if (window.feedBack && typeof window.feedBack.on === 'function') {
             window.feedBack.on('song:loaded', updateKeyStatus);
         }
@@ -2989,6 +3560,8 @@
             window.dnlSetScaleDotOpacity(DEFAULT_SETTINGS.scaleDotOpacity);
             dotOpacityInput.value = String(DEFAULT_SETTINGS.scaleDotOpacity);
             dotOpacityValSpan.textContent = String(DEFAULT_SETTINGS.scaleDotOpacity);
+            window.dnlSetNoteNaming(DEFAULT_SETTINGS.noteNaming);
+            noteNamingSelect.value = DEFAULT_SETTINGS.noteNaming;
             window.dnlSetScaleDisplayMode(DEFAULT_SETTINGS.scaleDisplayMode);
             scaleModeSelect.value = DEFAULT_SETTINGS.scaleDisplayMode;
             window.dnlSetScaleUseFretColor(DEFAULT_SETTINGS.scaleUseFretColor);
@@ -3060,6 +3633,13 @@
             bgOpValSpan.textContent = DEFAULT_SETTINGS.bgOpacity + '%';
             setBgSubRowsEnabled(DEFAULT_SETTINGS.bgEnabled);
         }
+
+        // Version line, bottom of the pane (see fetchPluginVersion).
+        const versionRow = document.createElement('div');
+        versionRow.style.cssText = 'margin-top:14px;padding-top:10px;border-top:1px solid #1f2937;color:#6b7280;font-size:12px;';
+        versionRow.textContent = 'Highway Notation';
+        panel.appendChild(versionRow);
+        fetchPluginVersion().then((v) => { if (v) versionRow.textContent = 'Highway Notation v' + v; });
 
         return panel;
     }

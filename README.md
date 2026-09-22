@@ -57,6 +57,12 @@ The chord name is centered over the actual strum shape as it approaches and stri
 ![Letter position can be dragged off the fret number](Screenshots/2D%20Highway%20Note%20Letter%20Offset.PNG)
 <sub>Letter position can be dragged off the fret number</sub>
 
+## Note Names
+
+Letters can be shown as C D E F G A B, or switched to fixed-do solfège (Do Ré Mi Fa Sol La Si) from the settings pane. The switch applies everywhere a note name is shown: gem letters, chord names, the scale overlay, and the key display.
+
+![French note names](Screenshots/Highway%20Notation%20French%20letters.jpg)
+
 ## Virtuoso
 
 > The settings pane needs to be opened before switching to Virtuoso — Virtuoso doesn't currently expose the Panes sidebar itself. This will be fixed in a future Virtuoso update to let the notation settings be opened directly from within it.

@@ -12,7 +12,7 @@ This isn't a single drop-in plugin — the download has three folders, and they 
    `highway_notation` folder install location: `feedback\current\resources\slopsmith\plugins\`
 
 2. **Updated 3D Highway** (Required for notes to display on 3D Highway)
-   'highway_3d' folder install location: `feedback\current\resources\slopsmith\plugins\highway_3d\` 
+   `highway_3d` folder install location: `feedback\current\resources\slopsmith\plugins\`
 
 3. **Updated 2D Highway** (Required for notes to display on 2D Highway)
    `static` folder install location: `feedback\current\resources\slopsmith\` 

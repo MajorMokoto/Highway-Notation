@@ -65,7 +65,7 @@ Letters can be shown as C D E F G A B, or switched to fixed-do solfège (Do Ré 
 
 ## Virtuoso
 
-> The settings pane needs to be opened before switching to Virtuoso — Virtuoso doesn't currently expose the Panes sidebar itself. This will be fixed in a future Virtuoso update to let the notation settings be opened directly from within it.
+> Virtuoso doesn't currently expose the Panes sidebar itself, so the settings pane can't be opened from inside it. With "Auto-open this pane when Virtuoso is selected" checked in Appearance settings (on by default), the pane opens on its own the first time you switch to Virtuoso. If it's unchecked, open the settings pane from the normal player screen before switching over.
 
 ![Note letters in Virtuoso practice mode](Screenshots/Virtuoso.PNG)
 
